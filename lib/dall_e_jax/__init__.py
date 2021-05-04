@@ -7,9 +7,9 @@ import jax.numpy as jnp
 from haiku._src.data_structures import FlatMapping
 import numpy as np
 
-from encoder import Encoder
-from decoder import Decoder
-from utils   import map_pixels, unmap_pixels, download_image
+from .encoder import Encoder
+from .decoder import Decoder
+from .utils   import map_pixels, unmap_pixels, download_image
 
 
 def load_statedict(path: str):
