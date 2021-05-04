@@ -53,7 +53,8 @@ def read_tfrecord(example):
     vec = tf.io.parse_tensor(data['vec'], tf.float32) 
     img = decode_img(data['img'])
 
-    return {'vec' : vec, 
+    return {'in' : vec[:-1],
+            'out': vec[1:], 
             'img' : img}
 
 def load_tf_records(filenames, ordered=False):
