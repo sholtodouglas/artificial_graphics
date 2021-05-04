@@ -75,7 +75,8 @@ class dataloader():
     def __init__(self,
                 path,
                 shuffle_size=64,
-                batch_size=512):
+                batch_size=512,
+                num_devices=1):
 
         self.shuffle_size = shuffle_size
         self.batch_size = batch_size
@@ -88,3 +89,6 @@ class dataloader():
                         .shuffle(self.shuffle_size)
                         .batch(self.batch_size, drop_remainder=True)
                         .prefetch(self.prefetch_size))
+
+        if num_devices > 1:
+            self.dataset = self.dataset.batch(num_devices)
