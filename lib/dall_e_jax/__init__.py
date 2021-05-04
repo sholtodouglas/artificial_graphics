@@ -9,7 +9,7 @@ import numpy as np
 
 from dall_e_jax.encoder import Encoder
 from dall_e_jax.decoder import Decoder
-from dall_e_jax.utils   import map_pixels, unmap_pixels
+from dall_e_jax.utils   import map_pixels, unmap_pixels, download_image
 
 
 def load_statedict(path: str):

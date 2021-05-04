@@ -1,4 +1,9 @@
 import jax.numpy as jnp
+import PIL
+from PIL import ImageOps
+import io
+import requests
+
 
 logit_laplace_eps: float = 0.1
 
@@ -19,3 +24,9 @@ def unmap_pixels(x: jnp.ndarray) -> jnp.ndarray:
 		raise ValueError('expected input to have type float')
 
 	return jnp.clip((x - logit_laplace_eps) / (1 - 2 * logit_laplace_eps), 0, 1)
+
+
+def download_image(url):
+    resp = requests.get(url)
+    resp.raise_for_status()
+    return PIL.Image.open(io.BytesIO(resp.content))

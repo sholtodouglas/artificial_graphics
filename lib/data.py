@@ -81,7 +81,7 @@ class dataloader():
         self.batch_size = batch_size
         self.prefetch_size = tf.data.experimental.AUTOTUNE
 
-        records = tf.io.gfile.glob(f"{path}\\tf_records/*.tfrecords")
+        records = tf.io.gfile.glob(f"{path}/tf_records/*.tfrecords")
         self.dataset = load_tf_records(records)
         self.dataset = (self.dataset
                         .repeat()
