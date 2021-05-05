@@ -4,6 +4,7 @@ import torch
 import jax
 import haiku as hk
 import jax.numpy as jnp
+from jax import grad, jit, vmap, pmap
 from haiku._src.data_structures import FlatMapping
 import numpy as np
 
