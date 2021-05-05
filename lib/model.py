@@ -23,7 +23,7 @@ class CausalSelfAttention(hk.MultiHeadAttention):
     seq_len = query.shape[1]
     causal_mask = np.tril(np.ones((seq_len, seq_len)))
     mask = mask * causal_mask if mask is not None else causal_mask
-
+    mask = jnp.tile(mask, [1, self.num_heads, 1,1]) # Weird that this is necessary
     return super().__call__(query, key, value, mask)
 
 
