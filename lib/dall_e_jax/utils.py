@@ -40,3 +40,11 @@ def preprocess(img, target_image_size=256):
 
 	img = np.expand_dims(np.transpose(np.array(img).astype(np.float32)/255, (2, 0, 1)), 0)
 	return map_pixels(img)
+
+@jit
+def preprocess_batch(b: dict, logit_laplace_eps = 0.1) -> dict:
+  imgs = b['img']/255.0
+  b['img'] = jnp.transpose(imgs, axes = [0, 3, 1, 2])
+  b['img'] = (1 - 2 * logit_laplace_eps) * b['img'] + logit_laplace_eps
+  return b
+

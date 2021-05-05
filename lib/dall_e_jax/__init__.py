@@ -9,7 +9,7 @@ import numpy as np
 
 from .encoder import Encoder
 from .decoder import Decoder
-from .utils   import map_pixels, unmap_pixels, download_image
+from .utils   import map_pixels, unmap_pixels, download_image, preprocess_batch
 
 
 def load_statedict(path: str):
