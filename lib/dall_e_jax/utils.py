@@ -4,7 +4,7 @@ from PIL import ImageOps
 import io
 import requests
 import numpy as np
-
+from jax import jit
 
 logit_laplace_eps: float = 0.1
 
