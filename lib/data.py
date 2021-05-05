@@ -1,16 +1,20 @@
 from tensorflow.train import BytesList, FloatList, Int64List
 from tensorflow.train import Example, Features, Feature
 import tensorflow as tf
-
+import numpy as np
+from io import BytesIO
+from tensorflow.python.lib.io import file_io
 
 ############################################### Serialsing ###################################################
 def transform_states(data):
 
-    vec, img = data['vecs'], tf.io.read_file(data['img_paths'])
+    vec, img, seq_len, seq_mask = data['vecs'], tf.io.read_file(data['img_paths']), data['seq_lens'], data['seq_masks']
 
     return {
             'vec': vec,
             'img': img,
+            'seq_len':seq_len,
+            'seq_mask':seq_mask,
             }
 
 def transform_dataset(dataset):
@@ -19,15 +23,19 @@ def transform_dataset(dataset):
 
 def serialise(data):
     
-    vec, img = data['vec'], data['img']
+    vec, img, seq_len, seq_mask = data['vec'], data['img'], data['seq_len'], data['seq_mask']
     
     vec = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(vec).numpy(),]))
     img = Feature(bytes_list=BytesList(value=[img.numpy(),]))
+    seq_len =  Feature(int64_list=Int64List(value=[seq_len,]))
+    seq_mask = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(seq_mask).numpy(),]))
     # img is already serialised because we never decode it!
     
     features = Features(feature={
                 'vec': vec,
                 'img': img,
+                'seq_len':seq_len,
+                'seq_mask':seq_mask,
                 })
     
     example = Example(features=features)
@@ -43,33 +51,7 @@ def decode_img(image_data):
 
 
 
-def read_tfrecord(example):
-    LABELED_TFREC_FORMAT = {
-            'vec': tf.io.FixedLenFeature([], tf.string), # tf.string means bytestring,
-            'img': tf.io.FixedLenFeature([], tf.string), # tf.string means bytestring,
-    }
-    data = tf.io.parse_single_example(example, LABELED_TFREC_FORMAT)
-    
-    vec = tf.io.parse_tensor(data['vec'], tf.float32) 
-    img = decode_img(data['img'])
 
-    return {'in' : vec[:-1],
-            'out': vec[1:], 
-            'img' : img}
-
-def load_tf_records(filenames, ordered=False):
-    # Read from TFRecords. For optimal performance, reading from multiple files at once and
-    # disregarding data order. Order does not matter since we will be shuffling the data anyway.
-
-    # check, does this ignore intra order or just inter order? Both are an issue!
-    ignore_order = tf.data.Options()
-    if not ordered:
-        ignore_order.experimental_deterministic = False # disable order, increase speed
-
-    dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=4) # automatically interleaves reads from multiple files - keep it at 1 we need the order
-    dataset = dataset.with_options(ignore_order) # uses data as soon as it streams in, rather than in its original order
-    dataset = dataset.map(read_tfrecord, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    return dataset
 
 
 class dataloader():
@@ -83,8 +65,17 @@ class dataloader():
         self.batch_size = batch_size
         self.prefetch_size = tf.data.experimental.AUTOTUNE
 
+        metadata = src = str(path)+'/metadata.npz'
+        f = BytesIO(file_io.read_file_to_string(src, binary_mode=True))
+        metadata = np.load(f)
+        # Basically envisaging it as some tokens for the img, some for a sentence description, some for the ppt vectors
+        self.img_tokens = metadata['img_tokens']
+        self.language_tokens = metadata['language_tokens']
+        self.component_tokens = metadata['component_tokens']
+        
+
         records = tf.io.gfile.glob(f"{path}/tf_records/*.tfrecords")
-        self.dataset = load_tf_records(records)
+        self.dataset = self.load_tf_records(records)
         self.dataset = (self.dataset
                         .repeat()
                         .shuffle(self.shuffle_size)
@@ -93,3 +84,38 @@ class dataloader():
 
         if num_devices > 1:
             self.dataset = self.dataset.batch(num_devices)
+
+
+    def read_tfrecord(self, example):
+        LABELED_TFREC_FORMAT = {
+                'vec': tf.io.FixedLenFeature([], tf.string), # tf.string means bytestring,
+                'img': tf.io.FixedLenFeature([], tf.string), # tf.string means bytestring,
+                'seq_len': tf.io.FixedLenFeature([], tf.int64),
+                'seq_mask':tf.io.FixedLenFeature([], tf.string),
+        }
+        data = tf.io.parse_single_example(example, LABELED_TFREC_FORMAT)
+        
+        vec = tf.io.parse_tensor(data['vec'], tf.float32) 
+        img = decode_img(data['img'])
+        seq_len = tf.cast(data['seq_len'], tf.int32) 
+        seq_mask = tf.io.parse_tensor(data['seq_mask'], tf.int32) 
+
+        return {'in' : vec[:-1], # all component tokens except for the last - which will be either end or padding
+                'out': vec[-(self.component_tokens-1):], # all component tokens except for the start token 
+                'img' : img,
+                'seq_len': seq_len,
+                'seq_mask':seq_mask}
+
+    def load_tf_records(self, filenames, ordered=False):
+        # Read from TFRecords. For optimal performance, reading from multiple files at once and
+        # disregarding data order. Order does not matter since we will be shuffling the data anyway.
+
+        # check, does this ignore intra order or just inter order? Both are an issue!
+        ignore_order = tf.data.Options()
+        if not ordered:
+            ignore_order.experimental_deterministic = False # disable order, increase speed
+
+        dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=4) # automatically interleaves reads from multiple files - keep it at 1 we need the order
+        dataset = dataset.with_options(ignore_order) # uses data as soon as it streams in, rather than in its original order
+        dataset = dataset.map(self.read_tfrecord, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        return dataset
