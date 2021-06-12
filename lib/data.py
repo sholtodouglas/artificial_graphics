@@ -5,13 +5,23 @@ import numpy as np
 from io import BytesIO
 from tensorflow.python.lib.io import file_io
 
+
 ############################################### Serialsing ###################################################
 def transform_states(data):
 
-    vec, img, seq_len, seq_mask = data['vecs'], tf.io.read_file(data['img_paths']), data['seq_lens'], data['seq_masks']
+    ID,pos, dimensions, color, border, fill, text, img, seq_len, seq_mask = data['ID'], data['pos'], data['dimensions'], data['color'], \
+                                                data['border'], data['fill'], data['text'], \
+                                                tf.io.read_file(data['img_paths']), \
+                                                data['seq_lens'], data['seq_masks'] \
 
     return {
-            'vec': vec,
+            'ID' : ID,
+            'pos' : pos,
+            'dimensions' : dimensions,
+            'color' : color,
+            'border' : border,
+            'fill' : fill,
+            'text' : text,
             'img': img,
             'seq_len':seq_len,
             'seq_mask':seq_mask,
@@ -23,16 +33,30 @@ def transform_dataset(dataset):
 
 def serialise(data):
     
-    vec, img, seq_len, seq_mask = data['vec'], data['img'], data['seq_len'], data['seq_mask']
-    
-    vec = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(vec).numpy(),]))
+    ID,pos, dimensions, color, border, fill, text, img, seq_len, seq_mask = data['ID'], data['pos'], data['dimensions'], data['color'], \
+                                    data['border'], data['fill'], data['text'], data['img'], \
+                                    int(data['seq_len']), data['seq_mask'] \
+
+    ID = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(ID).numpy(),]))
+    pos = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(pos).numpy(),]))
+    dimensions = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(dimensions).numpy(),]))
+    color = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(color).numpy(),]))
+    border = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(border).numpy(),]))
+    fill = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(fill).numpy(),]))
+    text = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(text).numpy(),]))
     img = Feature(bytes_list=BytesList(value=[img.numpy(),]))
     seq_len =  Feature(int64_list=Int64List(value=[seq_len,]))
     seq_mask = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(seq_mask).numpy(),]))
     # img is already serialised because we never decode it!
     
     features = Features(feature={
-                'vec': vec,
+                'ID' : ID,
+                'pos' : pos,
+                'dimensions' : dimensions,
+                'color' : color,
+                'border' : border,
+                'fill' : fill,
+                'text' : text,
                 'img': img,
                 'seq_len':seq_len,
                 'seq_mask':seq_mask,
@@ -50,7 +74,11 @@ def decode_img(image_data):
     return image
 
 
-
+def decode_img_prepro_inception(image_data):
+    image = tf.image.decode_jpeg(image_data, channels=3)
+    image = tf.image.resize(image, (299, 299))
+    image = tf.keras.applications.inception_v3.preprocess_input(image)
+    return image
 
 
 
@@ -59,7 +87,8 @@ class dataloader():
                 path,
                 shuffle_size=64,
                 batch_size=512,
-                num_devices=1):
+                num_devices=1, 
+                inception_prepro = False):
 
         self.shuffle_size = shuffle_size
         self.batch_size = batch_size
@@ -88,20 +117,28 @@ class dataloader():
 
     def read_tfrecord(self, example):
         LABELED_TFREC_FORMAT = {
-                'vec': tf.io.FixedLenFeature([], tf.string), # tf.string means bytestring,
+                'ID': tf.io.FixedLenFeature([], tf.string),
+                'pos': tf.io.FixedLenFeature([], tf.string),
+                'dimensions': tf.io.FixedLenFeature([], tf.string),
+                'color': tf.io.FixedLenFeature([], tf.string),
+                'border': tf.io.FixedLenFeature([], tf.string),
+                'fill': tf.io.FixedLenFeature([], tf.string),
+                'text': tf.io.FixedLenFeature([], tf.string),
                 'img': tf.io.FixedLenFeature([], tf.string), # tf.string means bytestring,
                 'seq_len': tf.io.FixedLenFeature([], tf.int64),
                 'seq_mask':tf.io.FixedLenFeature([], tf.string),
         }
         data = tf.io.parse_single_example(example, LABELED_TFREC_FORMAT)
-        
-        vec = tf.io.parse_tensor(data['vec'], tf.float32) 
-        img = decode_img(data['img'])
+        ID = tf.io.parse_tensor(data['ID'], tf.int32) 
+        if self.inception_prepro:
+            img = decode_img_prepro_inception(data['img'])
+        else:
+            img = decode_img(data['img'])
         seq_len = tf.cast(data['seq_len'], tf.int32) 
-        seq_mask = tf.io.parse_tensor(data['seq_mask'], tf.int32) 
+        seq_mask = tf.io.parse_tensor(data['seq_mask'], tf.float32) 
 
-        return {'in' : vec[:-1], # all component tokens except for the last - which will be either end or padding
-                'out': vec[-(self.component_tokens-1):], # all component tokens except for the start token 
+        return {'sequence' : ID[:-1], # all component tokens except for the last - which will be either end or padding
+                'target': ID[1:], # all component tokens except for the start token 
                 'img' : img,
                 'seq_len': seq_len,
                 'seq_mask':seq_mask}
