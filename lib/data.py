@@ -84,7 +84,7 @@ def decode_img_prepro_inception(image_data):
 
 class dataloader():
     def __init__(self,
-                path,
+                paths,
                 shuffle_size=64,
                 batch_size=512,
                 num_devices=1, 
