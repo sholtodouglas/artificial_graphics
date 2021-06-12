@@ -93,6 +93,7 @@ class dataloader():
         self.shuffle_size = shuffle_size
         self.batch_size = batch_size
         self.prefetch_size = tf.data.experimental.AUTOTUNE
+        self.inception_prepro = inception_prepro
 
         # metadata = src = str(path)+'/metadata.npz'
         # f = BytesIO(file_io.read_file_to_string(src, binary_mode=True))
@@ -110,6 +111,8 @@ class dataloader():
                         .shuffle(self.shuffle_size)
                         .batch(self.batch_size, drop_remainder=True)
                         .prefetch(self.prefetch_size))
+
+                    
 
         if num_devices > 1:
             self.dataset = self.dataset.batch(num_devices)
