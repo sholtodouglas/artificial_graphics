@@ -106,7 +106,7 @@ class dataloader():
 
         records = []
         for p in paths:
-            records += tf.io.gfile.glob(f"{p}/tf_records/*.tfrecords"):
+            records += tf.io.gfile.glob(f"{p}/tf_records/*.tfrecords")
 
         self.dataset = self.load_tf_records(records)
         self.dataset = (self.dataset
