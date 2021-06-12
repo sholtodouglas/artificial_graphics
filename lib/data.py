@@ -104,7 +104,10 @@ class dataloader():
         # self.component_tokens = metadata['component_tokens']
         
 
-        records = tf.io.gfile.glob(f"{path}/tf_records/*.tfrecords")
+        records = []
+        for p in paths:
+            records += tf.io.gfile.glob(f"{p}/tf_records/*.tfrecords"):
+
         self.dataset = self.load_tf_records(records)
         self.dataset = (self.dataset
                         .repeat()
