@@ -94,13 +94,13 @@ class dataloader():
         self.batch_size = batch_size
         self.prefetch_size = tf.data.experimental.AUTOTUNE
 
-        metadata = src = str(path)+'/metadata.npz'
-        f = BytesIO(file_io.read_file_to_string(src, binary_mode=True))
-        metadata = np.load(f)
-        # Basically envisaging it as some tokens for the img, some for a sentence description, some for the ppt vectors
-        self.img_tokens = metadata['img_tokens']
-        self.language_tokens = metadata['language_tokens']
-        self.component_tokens = metadata['component_tokens']
+        # metadata = src = str(path)+'/metadata.npz'
+        # f = BytesIO(file_io.read_file_to_string(src, binary_mode=True))
+        # metadata = np.load(f)
+        # # Basically envisaging it as some tokens for the img, some for a sentence description, some for the ppt vectors
+        # self.img_tokens = metadata['img_tokens']
+        # self.language_tokens = metadata['language_tokens']
+        # self.component_tokens = metadata['component_tokens']
         
 
         records = tf.io.gfile.glob(f"{path}/tf_records/*.tfrecords")
