@@ -144,7 +144,10 @@ class dataloader():
         seq_mask = tf.io.parse_tensor(data['seq_mask'], tf.float32) 
 
         return {'sequence' : ID[:-1], # all component tokens except for the last - which will be either end or padding
-                'target': ID[1:], # all component tokens except for the start token 
+                'target': ID[1:], # all component tokens except for the start token
+                'pos': data['pos'][1:]
+                'dimensions': data['dimensions'][1:]
+                'color': data['color'][1:] 
                 'img' : img,
                 'seq_len': seq_len,
                 'seq_mask':seq_mask}
@@ -158,7 +161,7 @@ class dataloader():
         if not ordered:
             ignore_order.experimental_deterministic = False # disable order, increase speed
 
-        dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=4) # automatically interleaves reads from multiple files - keep it at 1 we need the order
+        dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=tf.data.experimental.AUTOTUNE) # automatically interleaves reads from multiple files - keep it at 1 we need the order
         dataset = dataset.with_options(ignore_order) # uses data as soon as it streams in, rather than in its original order
         dataset = dataset.map(self.read_tfrecord, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         return dataset
