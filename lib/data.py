@@ -38,12 +38,12 @@ def serialise(data):
                                     int(data['seq_len']), data['seq_mask'] \
 
     ID = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(ID).numpy(),]))
-    pos = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(pos).numpy(),]))
-    dimensions = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(dimensions).numpy(),]))
-    color = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(color).numpy(),]))
-    border = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(border).numpy(),]))
-    fill = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(fill).numpy(),]))
-    text = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(text).numpy(),]))
+    pos = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(tf.cast(pos, tf.float32)).numpy(),]))
+    dimensions = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(tf.cast(dimensions, tf.float32)).numpy(),]))
+    color = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(tf.cast(color, tf.float32)).numpy(),]))
+    border = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(tf.cast(border, tf.float32)).numpy(),]))
+    fill = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(tf.cast(fill, tf.float32)).numpy(),]))
+    text = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(tf.cast(text, tf.float32)).numpy(),]))
     img = Feature(bytes_list=BytesList(value=[img.numpy(),]))
     seq_len =  Feature(int64_list=Int64List(value=[seq_len,]))
     seq_mask = Feature(bytes_list=BytesList(value=[tf.io.serialize_tensor(seq_mask).numpy(),]))
@@ -143,11 +143,16 @@ class dataloader():
         seq_len = tf.cast(data['seq_len'], tf.int32) 
         seq_mask = tf.io.parse_tensor(data['seq_mask'], tf.float32) 
 
+
+                #         
+                
+
+
         return {'sequence' : ID[:-1], # all component tokens except for the last - which will be either end or padding
                 'target': ID[1:], # all component tokens except for the start token
-                'pos': data['pos'][1:],
-                'dimensions': data['dimensions'][1:],
-                'color': data['color'][1:],
+                'pos': tf.io.parse_tensor(data['pos'], tf.float32)[1:],
+                'dimensions': tf.io.parse_tensor(data['dimensions'], tf.float32)[1:],
+                'color':  tf.io.parse_tensor(data['color'], tf.float32)[1:],
                 'img' : img,
                 'seq_len': seq_len,
                 'seq_mask':seq_mask}
