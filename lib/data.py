@@ -145,9 +145,9 @@ class dataloader():
 
         return {'sequence' : ID[:-1], # all component tokens except for the last - which will be either end or padding
                 'target': ID[1:], # all component tokens except for the start token
-                'pos': data['pos'][1:]
-                'dimensions': data['dimensions'][1:]
-                'color': data['color'][1:] 
+                'pos': data['pos'][1:],
+                'dimensions': data['dimensions'][1:],
+                'color': data['color'][1:],
                 'img' : img,
                 'seq_len': seq_len,
                 'seq_mask':seq_mask}
