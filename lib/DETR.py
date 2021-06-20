@@ -6,7 +6,7 @@ from transformers.models.detr.modeling_detr import (
                                     nested_tensor_from_tensor_list, 
                                     sigmoid_focal_loss, 
                                     dice_loss) 
-
+from transformers.models.detr.feature_extraction_detr import center_to_corners_format
 from transformers.file_utils import ModelOutput, requires_backends
 from transformers import DetrConfig
 import torch
