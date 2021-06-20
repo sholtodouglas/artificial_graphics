@@ -1,6 +1,11 @@
-from transformers.models.detr.modeling_detr import DetrPreTrainedModel, DetrModel, DetrMLPPredictionHead, \
-                                    generalized_box_iou, nested_tensor_from_tensor_list, sigmoid_focal_loss, \
-                                    dice_loss, 
+from transformers.models.detr.modeling_detr import (
+                                    DetrPreTrainedModel,
+                                    DetrModel, 
+                                    DetrMLPPredictionHead, 
+                                    generalized_box_iou, 
+                                    nested_tensor_from_tensor_list, 
+                                    sigmoid_focal_loss, 
+                                    dice_loss) 
 
 from transformers.file_utils import ModelOutput, requires_backends
 from transformers import DetrConfig
