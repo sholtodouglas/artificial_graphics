@@ -102,7 +102,7 @@ def load(model):
     state_dict = torch.load(f'saved_models/{args.run_name}', map_location=torch.device(device))
     model.load_state_dict(state_dict)
     
-load(model)
+# load(model)
 
 def collate_fn(batch):
   pixel_values = [item[0] for item in batch]

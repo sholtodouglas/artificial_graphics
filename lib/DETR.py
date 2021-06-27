@@ -91,6 +91,12 @@ class DetrForObjectDetection(DetrPreTrainedModel):
         self.bbox_predictor = DetrMLPPredictionHead(
             input_dim=config.d_model, hidden_dim=config.d_model, output_dim=4, num_layers=3
         )
+        self.fill_predictor = DetrMLPPredictionHead(
+            input_dim=config.d_model, hidden_dim=config.d_model, output_dim=3, num_layers=2
+        )
+        self.rotation_predictor = DetrMLPPredictionHead(
+            input_dim=config.d_model, hidden_dim=config.d_model, output_dim=2, num_layers=2
+        )
 
         self.init_weights()
 
@@ -157,6 +163,8 @@ class DetrForObjectDetection(DetrPreTrainedModel):
         # class logits + predicted bounding boxes
         logits = self.class_labels_classifier(sequence_output) # B, 100, 10
         pred_boxes = self.bbox_predictor(sequence_output).sigmoid() # B, 100, 4
+        pred_fill = self.fill_predictor(sequence_output).sigmoid()
+        pred_rotation = self.rotation_predictor(sequence_output).tanh()
 
         loss, loss_dict, auxiliary_outputs = None, None, None
         if labels is not None:
@@ -165,7 +173,7 @@ class DetrForObjectDetection(DetrPreTrainedModel):
                 class_cost=self.config.class_cost, bbox_cost=self.config.bbox_cost, giou_cost=self.config.giou_cost
             )
             # Second: create the criterion
-            losses = ["labels", "boxes", "cardinality"]
+            losses = ["labels", "boxes", "cardinality", "fill", "rotation"]
             criterion = DetrLoss(
                 matcher=matcher,
                 num_classes=self.config.num_labels,
@@ -177,6 +185,9 @@ class DetrForObjectDetection(DetrPreTrainedModel):
             outputs_loss = {}
             outputs_loss["logits"] = logits
             outputs_loss["pred_boxes"] = pred_boxes
+            outputs_loss["pred_fill"] = pred_fill
+            outputs_loss["pred_rotation"] = pred_rotation
+
             if self.config.auxiliary_loss:
                 intermediate = outputs.intermediate_hidden_states if return_dict else outputs[4]
                 outputs_class = self.class_labels_classifier(intermediate)
@@ -186,8 +197,7 @@ class DetrForObjectDetection(DetrPreTrainedModel):
 
             loss_dict = criterion(outputs_loss, labels)
             # Fourth: compute total loss, as a weighted sum of the various losses
-            weight_dict = {"loss_ce": 1, "loss_bbox": self.config.bbox_loss_coefficient}
-            weight_dict["loss_giou"] = self.config.giou_loss_coefficient
+            weight_dict = {"loss_ce": 1, "loss_bbox": self.config.bbox_loss_coefficient, "loss_giou":self.config.giou_loss_coefficient, "loss_fill":1, "loss_rotation":1}
             if self.config.auxiliary_loss:
                 aux_weight_dict = {}
                 for i in range(self.config.decoder_layers - 1):
@@ -226,7 +236,7 @@ class DetrHungarianMatcher(nn.Module):
     un-matched (and thus treated as non-objects).
     """
 
-    def __init__(self, class_cost: float = 1, bbox_cost: float = 1, giou_cost: float = 1):
+    def __init__(self, class_cost: float = 1, bbox_cost: float = 1, giou_cost: float = 1, fill_cost=0.2, rotation_cost=0.2):
         """
         Creates the matcher.
         Params:
@@ -241,6 +251,8 @@ class DetrHungarianMatcher(nn.Module):
         self.class_cost = class_cost
         self.bbox_cost = bbox_cost
         self.giou_cost = giou_cost
+        self.fill_cost = fill_cost
+        self.rotation_cost = rotation_cost
         assert class_cost != 0 or bbox_cost != 0 or giou_cost != 0, "All costs of the Matcher can't be 0"
 
     @torch.no_grad()
@@ -267,9 +279,18 @@ class DetrHungarianMatcher(nn.Module):
         out_prob = outputs["logits"].flatten(0, 1).softmax(-1)  # [batch_size * num_queries, num_classes]
         out_bbox = outputs["pred_boxes"].flatten(0, 1)  # [batch_size * num_queries, 4]
 
+        # New
+        out_fill = outputs["pred_fill"].flatten(0,1)
+        out_rotation = outputs["pred_rotation"].flatten(0,1)
+
+
         # Also concat the target labels and boxes
         tgt_ids = torch.cat([v["class_labels"] for v in targets]) # N_tgts
         tgt_bbox = torch.cat([v["boxes"] for v in targets]) # N_tgts (B * per batch tgts)
+
+        # New
+        tgts_fill =  torch.cat([v["fill"] for v in targets]) # N_tgts (B * per batch tgts)
+        tgts_rotation =  torch.cat([v["rotation"] for v in targets]) # N_tgts (B * per batch tgts)
 
         # Compute the classification cost. Contrary to the loss, we don't use the NLL,
         # but approximate it in 1 - proba[target class].
@@ -279,11 +300,15 @@ class DetrHungarianMatcher(nn.Module):
         # Compute the L1 cost between boxes
         bbox_cost = torch.cdist(out_bbox, tgt_bbox, p=1) # L1 dist between this BBox and all the tgt bboxs B*NQ, N_tgts
 
+        # New
+        fill_cost = torch.cdist(out_fill, tgts_fill, p=1)
+        rotation_cost = torch.cdist(out_rotation, tgts_rotation, p=1)
+
         # Compute the giou cost between boxes
         giou_cost = -generalized_box_iou(center_to_corners_format(out_bbox), center_to_corners_format(tgt_bbox))
 
         # Final cost matrix
-        cost_matrix = self.bbox_cost * bbox_cost + self.class_cost * class_cost + self.giou_cost * giou_cost
+        cost_matrix = self.bbox_cost * bbox_cost + self.class_cost * class_cost + self.giou_cost * giou_cost + self.fill_cost*fill_cost + self.rotation_cost*rotation_cost
         cost_matrix = cost_matrix.view(bs, num_queries, -1).cpu()
 
         sizes = [len(v["boxes"]) for v in targets]
@@ -343,7 +368,7 @@ class DetrLoss(nn.Module):
         target_classes[idx] = target_classes_o # you'd have to use assign in tf
 
         loss_ce = nn.functional.cross_entropy(src_logits.transpose(1, 2), target_classes, self.empty_weight) # ([B, N_classes, N_heads]), [B, N_heads], empty_weight is just 1s for all classes but 0.1 for null class
-        
+
         losses = {"loss_ce": loss_ce}
 
         return losses
@@ -384,6 +409,31 @@ class DetrLoss(nn.Module):
         )
         losses["loss_giou"] = loss_giou.sum() / num_boxes
         return losses
+
+    def loss_fill(self, outputs, targets, indices, num_boxes):
+        idx = self._get_src_permutation_idx(indices)
+        src_fill = outputs["pred_fill"][idx]
+        target_fill = torch.cat([t["fill"][i] for t, (_, i) in zip(targets, indices)], dim=0)
+
+        loss_fill = nn.functional.l1_loss(src_fill, target_fill, reduction="none")
+
+        losses = {}
+        losses["loss_fill"] = loss_fill.sum() / num_boxes
+        return losses
+
+    def loss_rotation(self, outputs, targets, indices, num_boxes):
+        idx = self._get_src_permutation_idx(indices)
+        src_rotation = outputs["pred_rotation"][idx]
+        target_rotation = torch.cat([t["rotation"][i] for t, (_, i) in zip(targets, indices)], dim=0)
+
+        loss_rotation = nn.functional.l1_loss(src_rotation, target_rotation, reduction="none")
+
+        losses = {}
+        losses["loss_rotation"] = loss_rotation.sum() / num_boxes
+        return losses
+
+
+
 
     def loss_masks(self, outputs, targets, indices, num_boxes):
         """
@@ -435,6 +485,8 @@ class DetrLoss(nn.Module):
             "cardinality": self.loss_cardinality,
             "boxes": self.loss_boxes,
             "masks": self.loss_masks,
+            "fill":self.loss_fill,
+            "rotation":self.loss_rotation,
         }
         assert loss in loss_map, f"Loss {loss} not supported"
         return loss_map[loss](outputs, targets, indices, num_boxes)
