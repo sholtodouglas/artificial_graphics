@@ -45,7 +45,7 @@ class PPT_shapes():
 def RGB(rgb):
     return rgb[2]*256**2 + rgb[1]*256 + rgb[0]
 
-def add_shape(slide, ID, x,y,w,h, rgb, border=0, fill = 1, text=0):
+def add_shape(slide, ID, x,y,w,h, rgb, border=0, fill = 1, text=0, rotation=0):
     '''
     rgb must be 0-1 ranges
     text just signifies if it has text, that one is a bit of a text to see how good the textures we can
@@ -60,6 +60,7 @@ def add_shape(slide, ID, x,y,w,h, rgb, border=0, fill = 1, text=0):
     shape.Fill.ForeColor.RGB  = RGB(np.array(rgb)*255)
     shape.Fill.Visible = fill
     shape.Line.Visible = border
+    shape.Rotation = rotation
     
     if text > 0: # eventually we'll be able to make a rule for whether white or black text is better 
         # based on fill rgb
@@ -120,6 +121,8 @@ def read_shape(shape):
         text = 1
     else: # just detect the presence of text atm, to make it easier to fill in.
         text = 0
+    
+    rotation = shape.Rotation
     return {
             'left': x,
             'top': y,
@@ -129,18 +132,21 @@ def read_shape(shape):
             'border': border,
             'fill': fill,
             'text': text,
+            'rotation': rotation,
             }
 
 def read_line(line, bb_margin=3):
     '''
+    https://docs.microsoft.com/en-us/office/vba/api/powerpoint.shape.line
     https://docs.microsoft.com/en-us/office/vba/api/powerpoint.lineformat
     '''
     left, top, height, width = line.left, line.top, line.height, line.width
     fillRGB =long_to_rgb(line.Line.ForeColor.RGB)
+    rotation = line.Rotation
     if height == 0: # horizontal line
-        return {'left': left, 'top': top-bb_margin, 'height': bb_margin, 'width': width, 'color': fillRGB}
+        return {'left': left, 'top': top-bb_margin, 'height': bb_margin, 'width': width, 'fillRGB': fillRGB, 'rotation': rotation}
     elif width == 0: # vertical line
-        return {'left': left-bb_margin, 'top': top, 'height': height, 'width': bb_margin, 'color': fillRGB}
+        return {'left': left-bb_margin, 'top': top, 'height': height, 'width': bb_margin, 'fillRGB': fillRGB, 'rotation': rotation}
     else:
         print("Currently only handling horizontal and vertical lines")
         raise NotImplementedError
@@ -180,7 +186,7 @@ def write_slide(readout, Presentation, shape_manager, slide=None):
             elif info[1] == 'textBox':
                 add_textBox(slide, o['left'], o['top'], o['width'], o['height'])
             elif info[1] == "shape":
-                add_shape(slide, info[0], o['left'], o['top'], o['width'], o['height'], rgb=o['fillRGB'])
+                add_shape(slide, info[0], o['left'], o['top'], o['width'], o['height'], rgb=o['fillRGB'], rotation=o['rotation'])
             elif info[1] == "line":
                 # this one is a little different becasue we write as x1,y1, x2,y2 but read as x,y,h,w with a lil margin. So! Get the x1,y1 as the 
                 x1,y1,x2,y2 =  convert_line_xyhw_to_points(o['left'],o['top'],o['width'],o['height'])

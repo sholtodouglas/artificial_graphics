@@ -151,12 +151,12 @@ class DetrForObjectDetection(DetrPreTrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-
-        sequence_output = outputs[0]
+        # Outputs ----- B, 100, 256  #   B, 1008, 256 
+        sequence_output = outputs[0] 
 
         # class logits + predicted bounding boxes
-        logits = self.class_labels_classifier(sequence_output)
-        pred_boxes = self.bbox_predictor(sequence_output).sigmoid()
+        logits = self.class_labels_classifier(sequence_output) # B, 100, 10
+        pred_boxes = self.bbox_predictor(sequence_output).sigmoid() # B, 100, 4
 
         loss, loss_dict, auxiliary_outputs = None, None, None
         if labels is not None:
@@ -261,23 +261,23 @@ class DetrHungarianMatcher(nn.Module):
                 - index_j is the indices of the corresponding selected targets (in order)
             For each batch element, it holds: len(index_i) = len(index_j) = min(num_queries, num_target_boxes)
         """
-        bs, num_queries = outputs["logits"].shape[:2]
+        bs, num_queries = outputs["logits"].shape[:2] # B, 100
 
         # We flatten to compute the cost matrices in a batch
         out_prob = outputs["logits"].flatten(0, 1).softmax(-1)  # [batch_size * num_queries, num_classes]
         out_bbox = outputs["pred_boxes"].flatten(0, 1)  # [batch_size * num_queries, 4]
 
         # Also concat the target labels and boxes
-        tgt_ids = torch.cat([v["class_labels"] for v in targets])
-        tgt_bbox = torch.cat([v["boxes"] for v in targets])
+        tgt_ids = torch.cat([v["class_labels"] for v in targets]) # N_tgts
+        tgt_bbox = torch.cat([v["boxes"] for v in targets]) # N_tgts (B * per batch tgts)
 
         # Compute the classification cost. Contrary to the loss, we don't use the NLL,
         # but approximate it in 1 - proba[target class].
         # The 1 is a constant that doesn't change the matching, it can be ommitted.
-        class_cost = -out_prob[:, tgt_ids]
+        class_cost = -out_prob[:, tgt_ids] # Out prob is B*Q, num_classes. This gets the -proba[target_class] for each of those heads
 
         # Compute the L1 cost between boxes
-        bbox_cost = torch.cdist(out_bbox, tgt_bbox, p=1)
+        bbox_cost = torch.cdist(out_bbox, tgt_bbox, p=1) # L1 dist between this BBox and all the tgt bboxs B*NQ, N_tgts
 
         # Compute the giou cost between boxes
         giou_cost = -generalized_box_iou(center_to_corners_format(out_bbox), center_to_corners_format(tgt_bbox))
@@ -287,7 +287,9 @@ class DetrHungarianMatcher(nn.Module):
         cost_matrix = cost_matrix.view(bs, num_queries, -1).cpu()
 
         sizes = [len(v["boxes"]) for v in targets]
-        indices = [linear_sum_assignment(c[i]) for i, c in enumerate(cost_matrix.split(sizes, -1))]
+        # Indices ends up len B, each one len (2)
+        indices = [linear_sum_assignment(c[i]) for i, c in enumerate(cost_matrix.split(sizes, -1))] # this splits the cost matrix up, i.e if B 1 has 9 labels and 2 has 6, then solves the linear sum assignment
+        # returns (i,j) where i is the head idx (out of 100) and j is the target idx out of N_tgts
         return [(torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(j, dtype=torch.int64)) for i, j in indices]
 
 
@@ -331,16 +333,17 @@ class DetrLoss(nn.Module):
         [nb_target_boxes]
         """
         assert "logits" in outputs, "No logits were found in the outputs"
-        src_logits = outputs["logits"]
+        src_logits = outputs["logits"] # B, 100, N_classes
 
-        idx = self._get_src_permutation_idx(indices)
-        target_classes_o = torch.cat([t["class_labels"][J] for t, (_, J) in zip(targets, indices)])
+        idx = self._get_src_permutation_idx(indices) #  batch indices ) (tensor([0, 0, 0, 0, ... 1, 1, 1]), tensor([ 2,  7, 11, ..., 27, 59]))
+        target_classes_o = torch.cat([t["class_labels"][J] for t, (_, J) in zip(targets, indices)]) # gets the class at each idx
         target_classes = torch.full(
             src_logits.shape[:2], self.num_classes, dtype=torch.int64, device=src_logits.device
-        )
-        target_classes[idx] = target_classes_o
+        ) # default inits with the final 'no class' label (i.e, creates a B, N)
+        target_classes[idx] = target_classes_o # you'd have to use assign in tf
 
-        loss_ce = nn.functional.cross_entropy(src_logits.transpose(1, 2), target_classes, self.empty_weight)
+        loss_ce = nn.functional.cross_entropy(src_logits.transpose(1, 2), target_classes, self.empty_weight) # ([B, N_classes, N_heads]), [B, N_heads], empty_weight is just 1s for all classes but 0.1 for null class
+        
         losses = {"loss_ce": loss_ce}
 
         return losses
@@ -413,10 +416,11 @@ class DetrLoss(nn.Module):
         }
         return losses
 
+    # Source (nn output)
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
-        batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)])
-        src_idx = torch.cat([src for (src, _) in indices])
+        batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)]) # creates the batch indices (i.e 0,0,0,0,1,1) depending on how many tgts there are
+        src_idx = torch.cat([src for (src, _) in indices]) # just gets the source indices that correspond
         return batch_idx, src_idx
 
     def _get_tgt_permutation_idx(self, indices):
@@ -443,7 +447,7 @@ class DetrLoss(nn.Module):
              targets: list of dicts, such that len(targets) == batch_size.
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
-        outputs_without_aux = {k: v for k, v in outputs.items() if k != "auxiliary_outputs"}
+        outputs_without_aux = {k: v for k, v in outputs.items() if k != "auxiliary_outputs"} # logits, pred_boxes
 
         # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(outputs_without_aux, targets)
