@@ -29,7 +29,7 @@ parser.add_argument('-c', '--colab', default=False, action='store_true', help='E
 parser.add_argument('-s', '--data_source', default='DRIVE', help='Source of training data')
 parser.add_argument('-d', '--device', default='TPU', help='Hardware device to train on')
 parser.add_argument('-b', '--batch_size', default=4, type=int)
-parser.add_argument('-log', '--log_steps', default=1, type=int)
+parser.add_argument('-log', '--log_steps', default=5, type=int)
 parser.add_argument('-lr', '--learning_rate', type=float, default=2e-4)
 parser.add_argument('-t', '--train_steps', type=int, default=1000)
 parser.add_argument('--bucket_name', help='GCS bucket name to stream data from')
@@ -210,7 +210,6 @@ def train_imagenet():
 
       optimizer.zero_grad()
       loss, _ = common_step(batch, device, model)
-      xm.master_print('loss {}'.format(loss))
       loss.backward()
       xm.optimizer_step(optimizer)
       tracker.add(args.batch_size)
