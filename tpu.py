@@ -198,12 +198,13 @@ def train_imagenet():
   device = xm.xla_device()
   model = create_model(id2label).to(device)
   writer = None
+  print('---------------------------------------------------a')
   if xm.is_master_ordinal():
     writer = test_utils.get_summary_writer('/tmp/')
   optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate,
                                   weight_decay=1e-4)
 
-
+  print('---------------------------------------------------b')
   def train_loop_fn(loader, epoch):
     tracker = xm.RateTracker()
     model.train()
@@ -232,7 +233,7 @@ def train_imagenet():
 
   train_device_loader = pl.MpDeviceLoader(train_loader, device)
   test_device_loader = pl.MpDeviceLoader(test_loader, device)
-
+  print('---------------------------------------------------c')
   for epoch in range(1, 5):
     xm.master_print('Epoch {} train begin {}'.format(epoch, test_utils.now()))
     train_loop_fn(train_device_loader, epoch)
