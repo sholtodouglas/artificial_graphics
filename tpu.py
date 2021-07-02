@@ -207,8 +207,10 @@ def train_imagenet():
   print('---------------------------------------------------b')
   def train_loop_fn(loader, epoch):
     tracker = xm.RateTracker()
+    print('---------------------------------------------------e')
     model.train()
     for step, batch in enumerate(loader):
+      print('---------------------------------------------------f')
       optimizer.zero_grad()
       loss, _ = common_step(batch, device, model)
       loss.backward()
@@ -235,7 +237,9 @@ def train_imagenet():
   test_device_loader = pl.MpDeviceLoader(test_loader, device)
   print('---------------------------------------------------c')
   for epoch in range(1, 5):
+    print('---------------------------------------------------d')
     xm.master_print('Epoch {} train begin {}'.format(epoch, test_utils.now()))
+    print('---------------------------------------------------e')
     train_loop_fn(train_device_loader, epoch)
     xm.master_print('Epoch {} train end {}'.format(epoch, test_utils.now()))
     # if not FLAGS.test_only_at_end or epoch == FLAGS.num_epochs:
@@ -248,7 +252,7 @@ def train_imagenet():
 
 
 def _mp_fn(index, flags):
-  print('ok')
+  
   torch.set_default_tensor_type('torch.FloatTensor')
   train_imagenet()
 
