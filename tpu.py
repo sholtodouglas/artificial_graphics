@@ -5,7 +5,6 @@
 import argparse
 from natsort import natsorted
 
-print('------------------------------------------a')
 import os
 import numpy as np
 import torch
@@ -21,7 +20,6 @@ import torch_xla.utils.utils as xu
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.xla_multiprocessing as xmp
 import torch_xla.test.test_utils as test_utils
-print('------------------------------------------b')
 
 parser = argparse.ArgumentParser(description='AG training arguments')
 parser.add_argument('run_name')
@@ -70,7 +68,7 @@ import torch
 
 from transformers import DetrFeatureExtractor
 from torch.utils.data import DataLoader
-print('------------------------------------------c')
+
 
 class CocoDetection(torchvision.datasets.CocoDetection):
     def __init__(self, img_folder, feature_extractor, train=True):
@@ -118,9 +116,9 @@ STORAGE_PATH = WORKING_PATH
 DATA_BASE = 'data/rgb_simple_ppt'
 
 
-print('Feat')
+
 feature_extractor = DetrFeatureExtractor.from_pretrained("facebook/detr-resnet-50")
-print('OverFeat')
+
 from transformers import DetrConfig
 from lib.DETR import DetrForObjectDetection
 import torch
@@ -134,7 +132,7 @@ def collate_fn(batch):
   batch['labels'] = labels
   return batch
 
-def create_model():
+def create_model(id2label):
   model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
   state_dict = model.state_dict()
   # Remove class weights
@@ -176,6 +174,8 @@ def train_imagenet():
   
   train_dataset = CocoDetection(img_folder=f'{DATA_BASE}/train', feature_extractor=feature_extractor)
   test_dataset = CocoDetection(img_folder=f'{DATA_BASE}/val', feature_extractor=feature_extractor, train=False)
+  cats = test_dataset.coco.cats
+  id2label = {k: v['name'] for k,v in cats.items()}
 
   train_sampler, test_sampler = None, None
   if xm.xrt_world_size() > 1:
@@ -196,7 +196,7 @@ def train_imagenet():
   torch.manual_seed(42)
 
   device = xm.xla_device()
-  model = create_model().to(device)
+  model = create_model(id2label).to(device)
   writer = None
   if xm.is_master_ordinal():
     writer = test_utils.get_summary_writer('/tmp/')
