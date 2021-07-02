@@ -117,7 +117,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         rotation = torch.as_tensor([a['rotation'] for a in target['annotations']])
         fill = torch.as_tensor([a['fill'] for a in target['annotations']])
         print(encoding.keys())
-        target = encoding["target"][0] # remove batch dimension
+        target = encoding["labels"][0] # remove batch dimension
         target['rotation'] = rotation
         target['fill'] = fill
         return pixel_values, target
