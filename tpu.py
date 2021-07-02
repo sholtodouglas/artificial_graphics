@@ -5,6 +5,24 @@
 import argparse
 from natsort import natsorted
 
+print('------------------------------------------a')
+import os
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
+import torch_xla
+import torch_xla.debug.metrics as met
+import torch_xla.distributed.parallel_loader as pl
+import torch_xla.utils.utils as xu
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.xla_multiprocessing as xmp
+import torch_xla.test.test_utils as test_utils
+print('------------------------------------------b')
+
 parser = argparse.ArgumentParser(description='AG training arguments')
 parser.add_argument('run_name')
 parser.add_argument('--train_datasets', nargs='+', help='Training dataset names')
@@ -45,23 +63,7 @@ import numpy as np
 import tensorflow as tf
 import time
 
-print('------------------------------------------a')
-import os
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torchvision
-import torchvision.transforms as transforms
-import torch_xla
-import torch_xla.debug.metrics as met
-import torch_xla.distributed.parallel_loader as pl
-import torch_xla.utils.utils as xu
-import torch_xla.core.xla_model as xm
-import torch_xla.distributed.xla_multiprocessing as xmp
-import torch_xla.test.test_utils as test_utils
-print('------------------------------------------b')
+
 import torchvision
 import os
 import torch 
