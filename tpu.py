@@ -247,9 +247,11 @@ def train_imagenet():
 
 
 def _mp_fn(index, flags):
+  print('ok')
   torch.set_default_tensor_type('torch.FloatTensor')
   train_imagenet()
 
 
 if __name__ == '__main__':
+  print('Beginning')
   xmp.spawn(_mp_fn, args=(args,), nprocs=8)
