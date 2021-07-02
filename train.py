@@ -267,5 +267,5 @@ outputs = model(pixel_values=batch['pixel_values'], pixel_mask=batch['pixel_mask
 # %%
 from pytorch_lightning import Trainer
 
-trainer = Trainer(tpus=8, max_steps=20000, gradient_clip_val=0.1)
+trainer = Trainer(tpu_cores=8, max_steps=20000, gradient_clip_val=0.1)
 trainer.fit(model)
