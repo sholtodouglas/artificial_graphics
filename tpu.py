@@ -190,8 +190,8 @@ def train_imagenet():
         rank=xm.get_ordinal(),
         shuffle=False)
 
-    train_loader = DataLoader(train_dataset, collate_fn=collate_fn, batch_size=args.batch_size, sampler = train_sampler, shuffle=True, num_workers = 3)
-    test_loader = DataLoader(test_dataset, collate_fn=collate_fn, batch_size=args.batch_size, sampler= test_sampler, shuffle=True, num_workers = 3)
+    train_loader = DataLoader(train_dataset, collate_fn=collate_fn, batch_size=args.batch_size, sampler = train_sampler,num_workers = 3)
+    test_loader = DataLoader(test_dataset, collate_fn=collate_fn, batch_size=args.batch_size, sampler= test_sampler, num_workers = 3)
 
   torch.manual_seed(42)
 
