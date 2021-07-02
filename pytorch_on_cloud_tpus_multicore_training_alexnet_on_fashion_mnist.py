@@ -239,9 +239,9 @@ def main():
   # Spawns eight of the map functions, one for each of the eight cores on
   # the Cloud TPU
   flags = {}
-  # Note: Colab only supports start_method='fork'
-  xmp.spawn(simple_map_fn_1, args=(flags,), nprocs=8, start_method='fork')
-  xmp.spawn(simple_map_fn2, args=(flags,), nprocs=8, start_method='fork')
+  # # Note: Colab only supports start_method='fork'
+  # xmp.spawn(simple_map_fn_1, args=(flags,), nprocs=8, start_method='fork')
+  # xmp.spawn(simple_map_fn2, args=(flags,), nprocs=8, start_method='fork')
   # Configures training (and evaluation) parameters
   # flags['batch_size'] = 32
   # flags['num_workers'] = 8
