@@ -118,9 +118,9 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
 from transformers import DetrFeatureExtractor
 from torch.utils.data import DataLoader
-
+print('Feat')
 feature_extractor = DetrFeatureExtractor.from_pretrained("facebook/detr-resnet-50")
-
+print('OverFeat')
 from transformers import DetrConfig
 from lib.DETR import DetrForObjectDetection
 import torch
