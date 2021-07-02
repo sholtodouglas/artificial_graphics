@@ -50,10 +50,8 @@ import torch_xla
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.xla_multiprocessing as xmp
 
-def main():
-# "Map function": acquires a corresponding Cloud TPU core, creates a tensor on it,
-# and prints its core
-  def simple_map_fn(index, flags):
+
+def simple_map_fn_1(index, flags):
     # Sets a common random seed - both for initialization and ensuring graph is the same
     torch.manual_seed(1234)
 
@@ -68,54 +66,9 @@ def main():
     # Barrier to prevent master from exiting before workers connect.
     xm.rendezvous('init')
 
-  # Spawns eight of the map functions, one for each of the eight cores on
-  # the Cloud TPU
-  flags = {}
-  # Note: Colab only supports start_method='fork'
-  xmp.spawn(simple_map_fn, args=(flags,), nprocs=8, start_method='fork')
-
-  """Let's start looking at the above cell with the call to `spawn(),` which is documented [here](http://pytorch.org/xla/#torch_xla.distributed.xla_multiprocessing.spawn). `spawn()` takes a function (the "map function"), a tuple of arguments (the placeholder `flags` dict), the number of processes to create, and whether to create these new processes by "forking" or "spawning." While spawning new processes is generally recommended, Colab only supports forking.
-
-  `spawn()` will create eight processes, one for each Cloud TPU core, and call `simple_map_fn()` -- the map function -- on each process. The inputs to `simple_map_fn()` are an index (zero through seven) and the placeholder `flags.` When the proccesses acquire their device they actually acquire their corresponding Cloud TPU core automatically, as the above cell demonstrates.
-
-  ### An Aside on Context
-
-  How did each process in the above cell know to acquire its own Cloud TPU core?
-
-  The answer is context. Accelerators, like Cloud TPUs, manage their operations using an implicit stateful context. In the cell above, the `spawn()` function creates a multiprocessing context and gives it to each new, forked process, allowing them to coordinate. We'll see another example of this coordination below.
-
-  Two warnings before we continue! First, you can't mix single process and multiprocess contexts when forking! Practically, this means that all our Cloud TPU-related calls will be done in processes created by spawn.
-  """
-
-  # Don't mix these!
-  # Only one type of context per Colab!
-  # Warning: uncommenting the below and running this cell will cause a runtime error!
-
-  #device = xm.xla_device()  # Requires a single process context
-
-  #xmp.spawn(simple_map_fn, args=(flags,), nprocs=8, start_method='fork')  # Requires a multiprocess context
-
-  """The second warning is: each process should perform the same Cloud TPU computations!"""
-
-  # Don't perform different computations on different processes!
-  # Warning: uncommenting the below and running this cell will likely hang your Colab!
-  # def simple_map_fn(index, flags):
-  #   torch.manual_seed(1234)
-  #   device = xm.xla_device()  
-
-  #   if xm.is_master_ordinal():
-  #     t = torch.randn((2, 2), device=device)  # Divergent Cloud TPU computation!
-
-
-  # xmp.spawn(simple_map_fn, args=(flags,), nprocs=8, start_method='fork')
-
-  """Performing the same Cloud TPU computations lets the context coordinate the processes correctly. Again, we'll see this better below.
-
-  Note, however, you CAN perform different CPU computations in each process, as the next cell demonstrates.
-  """
-
   # Common Cloud TPU computation but different CPU computation is OK
-  def simple_map_fn(index, flags):
+  # 
+def simple_map_fn2(index, flags):
     torch.manual_seed(1234)
     device = xm.xla_device()  
 
@@ -129,27 +82,13 @@ def main():
     xm.rendezvous('init')
 
 
-  xmp.spawn(simple_map_fn, args=(flags,), nprocs=8, start_method='fork')
-
-  """### Multicore Training
-
-  The following cell defines a map function that trains AlexNet on the Fashion MNIST dataset on all eight available Cloud TPU cores. The function is long and contained in a single cell, so it includes lengthy comments. It does the following:
-
-  - **Setup**: every process sets the same random seed and acquires the device assigned to it (via the accelerator context, see above)
-  - **Dataloading**: each process acquires its own copy of the dataset, but their sampling from it is coordinated to not overlap.
-  - **Network creation**: each process has its own copy of the network, but these copies are identical since each process's random seed is the same.
-  - **Training** and **Evaluation**: Training and evaluation occur as usual but use a ParallelLoader.
-
-  Aside from a couple different classes, like the DistributedSampler and the ParallelLoader, the big difference between single core and multicore training is behind the scenes. The `step()` function now not only propagates gradients, but uses the Cloud TPU context to synchronize gradient updates across each processes' copy of the network. This ensures that each processes' network copy stays "in sync" (they are all identical). 
-  """
-
   import torchvision
   from torchvision import datasets
   import torchvision.transforms as transforms
   import torch_xla.distributed.parallel_loader as pl
   import time
 
-  def map_fn(index, flags):
+def map_fn(index, flags):
     ## Setup 
 
     # Sets a common random seed - both for initialization and ensuring graph is the same
@@ -291,6 +230,76 @@ def main():
     elapsed_eval_time = time.time() - eval_start
     print("Process", index, "finished evaluation. Evaluation time was:", elapsed_eval_time)
     print("Process", index, "guessed", num_correct, "of", total_guesses, "correctly for", num_correct/total_guesses * 100, "% accuracy.")
+
+def main():
+# "Map function": acquires a corresponding Cloud TPU core, creates a tensor on it,
+# and prints its core
+  
+
+  # Spawns eight of the map functions, one for each of the eight cores on
+  # the Cloud TPU
+  flags = {}
+  # Note: Colab only supports start_method='fork'
+  xmp.spawn(simple_map_fn_1, args=(flags,), nprocs=8, start_method='fork')
+
+  """Let's start looking at the above cell with the call to `spawn(),` which is documented [here](http://pytorch.org/xla/#torch_xla.distributed.xla_multiprocessing.spawn). `spawn()` takes a function (the "map function"), a tuple of arguments (the placeholder `flags` dict), the number of processes to create, and whether to create these new processes by "forking" or "spawning." While spawning new processes is generally recommended, Colab only supports forking.
+
+  `spawn()` will create eight processes, one for each Cloud TPU core, and call `simple_map_fn()` -- the map function -- on each process. The inputs to `simple_map_fn()` are an index (zero through seven) and the placeholder `flags.` When the proccesses acquire their device they actually acquire their corresponding Cloud TPU core automatically, as the above cell demonstrates.
+
+  ### An Aside on Context
+
+  How did each process in the above cell know to acquire its own Cloud TPU core?
+
+  The answer is context. Accelerators, like Cloud TPUs, manage their operations using an implicit stateful context. In the cell above, the `spawn()` function creates a multiprocessing context and gives it to each new, forked process, allowing them to coordinate. We'll see another example of this coordination below.
+
+  Two warnings before we continue! First, you can't mix single process and multiprocess contexts when forking! Practically, this means that all our Cloud TPU-related calls will be done in processes created by spawn.
+  """
+
+  # Don't mix these!
+  # Only one type of context per Colab!
+  # Warning: uncommenting the below and running this cell will cause a runtime error!
+
+  #device = xm.xla_device()  # Requires a single process context
+
+  #xmp.spawn(simple_map_fn, args=(flags,), nprocs=8, start_method='fork')  # Requires a multiprocess context
+
+  """The second warning is: each process should perform the same Cloud TPU computations!"""
+
+  # Don't perform different computations on different processes!
+  # Warning: uncommenting the below and running this cell will likely hang your Colab!
+  # def simple_map_fn(index, flags):
+  #   torch.manual_seed(1234)
+  #   device = xm.xla_device()  
+
+  #   if xm.is_master_ordinal():
+  #     t = torch.randn((2, 2), device=device)  # Divergent Cloud TPU computation!
+
+
+  # xmp.spawn(simple_map_fn, args=(flags,), nprocs=8, start_method='fork')
+
+  """Performing the same Cloud TPU computations lets the context coordinate the processes correctly. Again, we'll see this better below.
+
+  Note, however, you CAN perform different CPU computations in each process, as the next cell demonstrates.
+  """
+
+
+
+
+  xmp.spawn(simple_map_fn2, args=(flags,), nprocs=8, start_method='fork')
+
+  """### Multicore Training
+
+  The following cell defines a map function that trains AlexNet on the Fashion MNIST dataset on all eight available Cloud TPU cores. The function is long and contained in a single cell, so it includes lengthy comments. It does the following:
+
+  - **Setup**: every process sets the same random seed and acquires the device assigned to it (via the accelerator context, see above)
+  - **Dataloading**: each process acquires its own copy of the dataset, but their sampling from it is coordinated to not overlap.
+  - **Network creation**: each process has its own copy of the network, but these copies are identical since each process's random seed is the same.
+  - **Training** and **Evaluation**: Training and evaluation occur as usual but use a ParallelLoader.
+
+  Aside from a couple different classes, like the DistributedSampler and the ParallelLoader, the big difference between single core and multicore training is behind the scenes. The `step()` function now not only propagates gradients, but uses the Cloud TPU context to synchronize gradient updates across each processes' copy of the network. This ensures that each processes' network copy stays "in sync" (they are all identical). 
+  """
+
+
 
   # Configures training (and evaluation) parameters
   flags['batch_size'] = 32
