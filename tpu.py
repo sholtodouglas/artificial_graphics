@@ -97,8 +97,6 @@ pp = pprint.PrettyPrinter(indent=4)
 # In[4]:
 
 
-
-print('Using local setup')
 WORKING_PATH = Path.cwd()
 
 # Change working directory to artificial_graphics
@@ -212,6 +210,7 @@ def train_imagenet():
 
       optimizer.zero_grad()
       loss, _ = common_step(batch, device, model)
+      xm.master_print('loss {}'.format(loss))
       loss.backward()
       xm.optimizer_step(optimizer)
       tracker.add(args.batch_size)
