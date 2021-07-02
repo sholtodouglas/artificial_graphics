@@ -51,42 +51,17 @@ pp = pprint.PrettyPrinter(indent=4)
 # In[4]:
 
 
-#@title Workpace Setup (Local vs Colab)
 
-# Set up working directory and libraries
-if args.colab:
-    from google.colab import drive, auth
-    print('Using colab setup')
-    WORKING_PATH = Path('/content/artificial_graphics')
-    # Clone repo
-    try:
-        get_ipython().system("git clone 'https://github.com/sholtodouglas/artificial_graphics' {WORKING_PATH}")
-    except: 
-        pass
-    # Mount drive
-    drive.mount('/content/drive')
-else:
-    print('Using local setup')
-    WORKING_PATH = Path.cwd()
-    print(f'Working path: {WORKING_PATH}')
+print('Using local setup')
+WORKING_PATH = Path.cwd()
+print(f'Working path: {WORKING_PATH}')
 
 # Change working directory to artificial_graphics
 os.chdir(WORKING_PATH)
 import lib
 
-
-if args.data_source == 'GCS':
-    if args.colab:
-      auth.authenticate_user()
-    print('Reading data from Google Cloud Storage')
-    r = requests.get('https://ipinfo.io')
-    region = r.json()['region']
-    project_id = 'learning-from-play-303306'
-    logging.warning(f'You are accessing GCS data from {region}, make sure this is the same as your bucket {args.bucket_name}')
-    STORAGE_PATH = Pathy(f'gs://{args.bucket_name}')
-else:
-    print('Reading data from local filesystem')
-    STORAGE_PATH = WORKING_PATH
+print('Reading data from local filesystem')
+STORAGE_PATH = WORKING_PATH
 
 # print(f'Storage path: {STORAGE_PATH}')
 # TRAIN_DATA_PATHS = [STORAGE_PATH/'data'/x for x in args.train_datasets]
