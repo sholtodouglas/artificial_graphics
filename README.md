@@ -21,7 +21,7 @@ gsutil -m cp -r dir gs://$BUCKET_NAME/data/rgb_simple_ppt/ data
 
 
 python3 train_lfp.py \
-angles&rgb  \
+anglesrgb  \
 --train_dataset rgb_ppt/train \
 --test_dataset rgb_ppt/val \
 -s LOCAL \
