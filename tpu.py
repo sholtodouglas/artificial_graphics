@@ -45,31 +45,6 @@ import numpy as np
 import tensorflow as tf
 import time
 
-
-
-pp = pprint.PrettyPrinter(indent=4)
-# In[4]:
-
-
-
-print('Using local setup')
-WORKING_PATH = Path.cwd()
-print(f'Working path: {WORKING_PATH}')
-
-# Change working directory to artificial_graphics
-os.chdir(WORKING_PATH)
-import lib
-
-print('Reading data from local filesystem')
-STORAGE_PATH = WORKING_PATH
-
-# print(f'Storage path: {STORAGE_PATH}')
-# TRAIN_DATA_PATHS = [STORAGE_PATH/'data'/x for x in args.train_datasets]
-# TEST_DATA_PATHS = [STORAGE_PATH/'data'/x for x in args.test_datasets]
-
-DATA_BASE = 'data/rgb_simple_ppt'
-
-
 import os
 import numpy as np
 import torch
@@ -86,12 +61,13 @@ import torch_xla.core.xla_model as xm
 import torch_xla.distributed.xla_multiprocessing as xmp
 import torch_xla.test.test_utils as test_utils
 
-
-
-# %%
 import torchvision
 import os
 import torch 
+
+from transformers import DetrFeatureExtractor
+from torch.utils.data import DataLoader
+
 
 class CocoDetection(torchvision.datasets.CocoDetection):
     def __init__(self, img_folder, feature_extractor, train=True):
@@ -116,8 +92,29 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         target['fill'] = fill
         return pixel_values, target
 
-from transformers import DetrFeatureExtractor
-from torch.utils.data import DataLoader
+pp = pprint.PrettyPrinter(indent=4)
+# In[4]:
+
+
+
+print('Using local setup')
+WORKING_PATH = Path.cwd()
+print(f'Working path: {WORKING_PATH}')
+
+# Change working directory to artificial_graphics
+os.chdir(WORKING_PATH)
+import lib
+
+print('Reading data from local filesystem')
+STORAGE_PATH = WORKING_PATH
+
+# print(f'Storage path: {STORAGE_PATH}')
+# TRAIN_DATA_PATHS = [STORAGE_PATH/'data'/x for x in args.train_datasets]
+# TEST_DATA_PATHS = [STORAGE_PATH/'data'/x for x in args.test_datasets]
+
+DATA_BASE = 'data/rgb_simple_ppt'
+
+
 print('Feat')
 feature_extractor = DetrFeatureExtractor.from_pretrained("facebook/detr-resnet-50")
 print('OverFeat')
