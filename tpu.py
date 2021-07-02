@@ -45,6 +45,7 @@ import numpy as np
 import tensorflow as tf
 import time
 
+print('------------------------------------------a')
 import os
 import numpy as np
 import torch
@@ -60,14 +61,14 @@ import torch_xla.utils.utils as xu
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.xla_multiprocessing as xmp
 import torch_xla.test.test_utils as test_utils
-
+print('------------------------------------------b')
 import torchvision
 import os
 import torch 
 
 from transformers import DetrFeatureExtractor
 from torch.utils.data import DataLoader
-
+print('------------------------------------------c')
 
 class CocoDetection(torchvision.datasets.CocoDetection):
     def __init__(self, img_folder, feature_extractor, train=True):
