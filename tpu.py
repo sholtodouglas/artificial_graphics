@@ -71,7 +71,6 @@ DATA_BASE = 'data/rgb_simple_ppt'
 
 
 import os
-import schedulers
 import numpy as np
 import torch
 import torch.nn as nn
