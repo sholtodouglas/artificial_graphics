@@ -68,6 +68,8 @@ class DetrObjectDetectionOutput(ModelOutput):
     loss_dict: Optional[Dict] = None
     logits: torch.FloatTensor = None
     pred_boxes: torch.FloatTensor = None
+    pred_fill: torch.FloatTensor = None
+    pred_rotation: torch.FloatTensor = None
     auxiliary_outputs: Optional[List[Dict]] = None
     last_hidden_state: Optional[torch.FloatTensor] = None
     decoder_hidden_states: Optional[Tuple[torch.FloatTensor]] = None
@@ -217,6 +219,8 @@ class DetrForObjectDetection(DetrPreTrainedModel):
             loss_dict=loss_dict,
             logits=logits,
             pred_boxes=pred_boxes,
+            pred_fill=pred_fill,
+            pred_rotation = pred_rotation,
             auxiliary_outputs=auxiliary_outputs,
             last_hidden_state=outputs.last_hidden_state,
             decoder_hidden_states=outputs.decoder_hidden_states,
