@@ -243,12 +243,12 @@ def main():
   xmp.spawn(simple_map_fn_1, args=(flags,), nprocs=8, start_method='fork')
   xmp.spawn(simple_map_fn2, args=(flags,), nprocs=8, start_method='fork')
   # Configures training (and evaluation) parameters
-  flags['batch_size'] = 32
-  flags['num_workers'] = 8
-  flags['num_epochs'] = 1
-  flags['seed'] = 1234
+  # flags['batch_size'] = 32
+  # flags['num_workers'] = 8
+  # flags['num_epochs'] = 1
+  # flags['seed'] = 1234
 
-  xmp.spawn(map_fn, args=(flags,), nprocs=8, start_method='fork')
+  # xmp.spawn(map_fn, args=(flags,), nprocs=8, start_method='fork')
 
 if __name__ == '__main__':
     main()
