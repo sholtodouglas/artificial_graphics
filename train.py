@@ -125,9 +125,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
 # %%
 # Based on the class defined above, we create training and validation datasets.
-from transformers import DetrFeatureExtractor
 
-feature_extractor = DetrFeatureExtractor.from_pretrained("facebook/detr-resnet-50")
 
 train_dataset = CocoDetection(img_folder=f'{DATA_BASE}/train', feature_extractor=feature_extractor)
 val_dataset = CocoDetection(img_folder=f'{DATA_BASE}/val', feature_extractor=feature_extractor, train=False)
@@ -267,5 +265,6 @@ outputs = model(pixel_values=batch['pixel_values'], pixel_mask=batch['pixel_mask
 # %%
 from pytorch_lightning import Trainer
 
+trainer = Trainer(tpu_cores=8, max_steps=20000, gradient_clip_val=0.1)
 trainer = Trainer(tpu_cores=8, max_steps=20000, gradient_clip_val=0.1)
 trainer.fit(model)

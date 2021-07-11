@@ -15,12 +15,18 @@ class PPT_shapes():
             'Title': (None, 'title'), # uses AddTitle
             'TextBox': (None, 'textBox'), # uses AddTextBox
             'StraightConnector': (None, 'line'), # uses AddLine
+            'StraightArrowConnector': (None, 'line'), # uses AddLine
             'Rectangle': (1, 'shape'),
+            'RoundedRectangle':(5,'shape'),
+            'Trapezoid': (3, 'shape'),
             'LeftArrow': (34, 'shape'),
             'Chevron': (52, 'shape'),
             'Oval': (9, 'shape'),
             'Donut': (18, 'shape'),
             'IsoscelesTriangle': (7, 'shape'),
+            'Pentagon': (51, 'shape'),
+            'Graphic': (None, 'graphic'),
+            'Chart': (None, 'graphic')
             }
         
         self.classIDs = {k:i for i, (k,v) in enumerate(self.shapes.items())}
@@ -28,10 +34,13 @@ class PPT_shapes():
     def read(self, shape):
         name = "".join(shape.Name.split(' ')[:-1])
         obj_type = self.shapes[name][1]
+        # print(namobj_type)
         if obj_type in ['title', 'textBox', 'shape']:
             func = read_shape
         elif obj_type in ['line']:
             func = read_line
+        elif obj_type in ['graphic']:
+            func = read_graphic
         else:
             raise NotImplementedError
 
@@ -51,7 +60,7 @@ def add_shape(slide, ID, x,y,w,h, rgb, border=0, fill = 1, text=0, rotation=0):
     text just signifies if it has text, that one is a bit of a text to see how good the textures we can
     pick up are
     pages are 720 x 540 - IMO lets enter objects as % width (so that they are 0-1 range)
-    
+    https://docs.microsoft.com/en-us/office/vba/api/office.msoautoshapetype
     '''
     # this is writing the properties
     shape = slide.Shapes.AddShape(ID, x,y,w,h)
@@ -104,6 +113,29 @@ def long_to_rgb(C):
     
     return np.array([R,G,B])/255
 
+def read_graphic(shape):
+    x=shape.Left
+    y=shape.Top
+    height = shape.Height
+    width = shape.Width
+    
+    fillRGB =long_to_rgb(shape.Fill.ForeColor.RGB)
+    fill = abs(shape.Fill.Visible) # sometimes returns -1 if not set, but its still visible in that case
+    border = abs(shape.Line.Visible)
+    text = 0
+    
+    rotation = shape.Rotation
+    return {
+            'left': x,
+            'top': y,
+            'height': height,
+            'width': width, 
+            'fillRGB': fillRGB, 
+            'border': border,
+            'fill': fill,
+            'text': text,
+            'rotation': rotation,
+            }
 
 def read_shape(shape):
     '''
@@ -143,9 +175,9 @@ def read_line(line, bb_margin=3):
     left, top, height, width = line.left, line.top, line.height, line.width
     fillRGB =long_to_rgb(line.Line.ForeColor.RGB)
     rotation = line.Rotation
-    if height == 0: # horizontal line
+    if height <= 1: # horizontal line
         return {'left': left, 'top': top-bb_margin, 'height': bb_margin, 'width': width, 'fillRGB': fillRGB, 'rotation': rotation}
-    elif width == 0: # vertical line
+    elif width <= 1: # vertical line
         return {'left': left-bb_margin, 'top': top, 'height': height, 'width': bb_margin, 'fillRGB': fillRGB, 'rotation': rotation}
     else:
         print("Currently only handling horizontal and vertical lines")
@@ -171,7 +203,9 @@ def convert_line_xyhw_to_points(x,y,w,h, bb_margin=3):
 def read_slide(slide, shape_manager):
     readout = []
     for shape in slide.Shapes:
-        readout.append(shape_manager.read(shape))
+        name = "".join(shape.Name.split(' ')[:-1])
+        if name != 'Picture':
+            readout.append(shape_manager.read(shape))
     return readout
 
 def write_slide(readout, Presentation, shape_manager, slide=None):
