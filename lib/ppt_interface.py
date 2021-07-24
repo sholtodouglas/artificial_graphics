@@ -5,7 +5,7 @@ import numpy as np
 import PIL
 from tqdm import tqdm
 import random 
-
+# https://www.automateexcel.com/vba/powerpoint-macro-examples-tutorial/#Get_Slide_Index_Number_of_Current_Slide
 
 
 
@@ -208,9 +208,9 @@ def read_slide(slide, shape_manager):
             readout.append(shape_manager.read(shape))
     return readout
 
-def write_slide(readout, Presentation, shape_manager, slide=None):
+def write_slide(readout, Presentation, shape_manager, slide=None, idx=1):
     if slide == None:
-        slide = Presentation.Slides.Add(1, 11)
+        slide = Presentation.Slides.Add(idx, 11)
         slide.Shapes.Title.delete()
 
         for o in readout:
