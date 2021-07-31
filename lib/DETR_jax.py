@@ -626,7 +626,7 @@ class DETR_transformer(nn.Module):
         x = self.transformer(positional_embeds_as_seq + 0.1*image_tiles_as_seq, queries)
         
         pred_logits = self.linear_class(x)
-        pred_bbox = self.linear_bbox(x)
+        pred_bbox = nn.sigmoid(self.linear_bbox(x)) # TODO maybe chuck an MLP on here
         
         
 
