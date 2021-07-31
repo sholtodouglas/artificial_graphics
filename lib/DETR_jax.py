@@ -182,7 +182,7 @@ class DetrLoss():
         self.eos_coef = eos_coef
         self.losses = losses
         self.ce_weight = jnp.concatenate([jnp.ones(self.num_classes), jnp.array([self.eos_coef])]) # different coeff for null
-        self.loss_weightings = {'labels': 1, 'boxes':1}
+        self.loss_weightings = {'loss_ce': 1, 'loss_bbox':1, 'loss_giou':1}
 
 
     # removed logging parameter, which was part of the original implementation
@@ -298,7 +298,6 @@ class DetrLoss():
         losses = {}
         for loss in self.losses:
             losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes))
-        print(losses)
         # Todo maybe re-include intermeidate auxiliary losses
         loss = sum(losses[k] * self.loss_weightings[k] for k in self.loss_weightings.keys())
         return loss, losses
