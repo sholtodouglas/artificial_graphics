@@ -635,7 +635,7 @@ class DETR_transformer(nn.Module):
     
 def load_pretrained_resnet(params):
     import torch 
-    state_dict = torch.load('saved_models/resnet50.pth')
+    state_dict = torch.load('pretrained/resnet50.pth')
     ResNet50, variables = pretrained_resnet(50, state_dict)
     rn = ResNet50()
     idx = 18 # gives B, 7,7,2048
