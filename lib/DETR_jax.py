@@ -298,7 +298,7 @@ class DetrLoss():
         losses = {}
         for loss in self.losses:
             losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes))
-
+        print(losses)
         # Todo maybe re-include intermeidate auxiliary losses
         loss = sum(losses[k] * self.loss_weightings[k] for k in self.loss_weightings.keys())
         return loss, losses
