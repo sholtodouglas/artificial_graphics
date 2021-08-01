@@ -195,18 +195,18 @@ class DetrLoss():
         idx = self._get_src_permutation_idx(indices) #  batch indices ) (tensor([0, 0, 0, 0, ... 1, 1, 1]), tensor([ 2,  7, 11, ..., 27, 59]))
         target_classes_o = np.concatenate([t["class_labels"][J] for t, (_, J) in zip(targets, indices)]) # gets the class at each idx
         
-        target_classes = np.ones(outputs["logits"].shape[:2])* self.num_classes # default inits with the final 'no class' label (i.e, creates a B, N)
+        return idx, target_classes_o # labels
 
-        target_classes = scatter_nd(target_classes, np.vstack(idx).astype(np.int32).T, target_classes_o)
-
-        return target_classes # labels
-
-    def ce_differentiable(self, outputs, labels):
+    def ce_differentiable(self, outputs, label_idx, target_classes_o):
         '''
         Need in logits Logits B, N_preds, N_classes - sould come from 
         Labels is generated above, and is identical in shape 
         '''
-        labels = jax.nn.one_hot(labels, self.num_classes+1)
+        target_classes = jnp.ones(outputs["logits"].shape[:2])* self.num_classes # default inits with the final 'no class' label (i.e, creates a B, N)
+
+        target_classes = scatter_nd(target_classes, jnp.vstack(label_idx).astype(jnp.int32).T, target_classes_o)
+
+        labels = jax.nn.one_hot(target_classes, self.num_classes+1)
         loss_ce = weighted_softmax_ce(outputs['logits'], labels, self.ce_weight) # ([B, N_classes, N_heads]), [B, N_heads], empty_weight is just 1s for all classes but 0.1 for null class
         return {'loss_ce': loss_ce}
         
@@ -283,11 +283,11 @@ class DetrLoss():
         num_boxes = np.array([num_boxes], dtype=jnp.float32)
         num_boxes = np.clip(num_boxes, 1, a_max=None)
 
-        ce_labels = self.get_labels_ce(outputs, targets, indices, num_boxes)
+        ce_idx, target_classes_o = self.get_labels_ce(outputs, targets, indices, num_boxes)
         bbx_idx, target_boxes = self.get_labels_and_idxs_bbox(outputs, targets, indices, num_boxes)
         cardnality_error = self.loss_cardinality(outputs, targets, indices, num_boxes)
 
-        return {'ce_labels': ce_labels, 'bbx_idx': bbx_idx, 'target_boxes' : target_boxes, 'cardinality_error': cardnality_error, 'num_boxes': num_boxes}
+        return {'ce_idx': ce_idx, 'target_classes_o': target_classes_o, 'bbx_idx': bbx_idx, 'target_boxes' : target_boxes, 'cardinality_error': cardnality_error, 'num_boxes': num_boxes}
 
     def get_losses(self, arrangements, outputs, targets):
         '''
@@ -295,7 +295,7 @@ class DetrLoss():
         Is that we can't pmap the non-differentable part, the loops fuck up @jit and it has to retrace every time. 
 
         '''
-        ce_loss = self.ce_differentiable(outputs, arrangements['ce_labels'])
+        ce_loss = self.ce_differentiable(outputs, arrangements['ce_idx'], arrangements['target_classes_o'])
         bbox_loss = self.bbox_differentiable(outputs, arrangements['bbx_idx'], arrangements['target_boxes'], arrangements['num_boxes'])
         loss_sum = ce_loss['loss_ce']*self.loss_weightings['loss_ce'] + bbox_loss['loss_bbox']*self.loss_weightings['loss_bbox'] + bbox_loss['loss_giou']*self.loss_weightings['loss_giou']
         # Todo replace with nicer syntax once we figure out if jit hates dict comprehensions
