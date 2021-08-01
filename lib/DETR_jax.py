@@ -281,7 +281,7 @@ class DetrLoss():
         # Compute the average number of target boxes accross all nodes, for normalization purposes
         num_boxes = sum(len(t["class_labels"]) for t in targets)
         num_boxes = np.array([num_boxes], dtype=jnp.float32)
-        num_boxes = np.clip(num_boxes, 1)
+        num_boxes = np.clip(num_boxes, 1, a_max=None)
 
         ce_labels = self.get_labels_ce(outputs, targets, indices, num_boxes)
         bbx_idx, target_boxes = self.get_labels_and_idxs_bbox(outputs, targets, indices, num_boxes)
