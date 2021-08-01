@@ -231,13 +231,23 @@ class DetrLoss():
         """
         bbx_idx = self._get_src_permutation_idx(indices)
 
-        target_boxes = jnp.concatenate([t["boxes"][i] for t, (_, i) in zip(targets, indices)], axis=0)
+        target_boxes = jnp.zeros(outputs['pred_boxes'].shape)
 
-        return bbx_idx, target_boxes
+        box_loss_mask = jnp.zeros(outputs['pred_boxes'].shape[:2])
 
-    def bbox_differentiable(self, outputs, idx, target_boxes, num_boxes):
-        src_boxes = outputs["pred_boxes"][idx]
-        loss_bbox = jnp.abs(src_boxes - target_boxes)
+        target_boxes_o = jnp.concatenate([t["boxes"][i] for t, (_, i) in zip(targets, indices)], axis=0)
+        box_loss_indices = jnp.ones(len(target_boxes_o))
+
+
+        target_boxes = scatter_nd(target_boxes, jnp.vstack(bbx_idx).astype(jnp.int32).T, target_boxes_o)
+        box_loss_mask = scatter_nd(box_loss_mask, jnp.vstack(bbx_idx).astype(jnp.int32).T, box_loss_indices)
+
+        return target_boxes, box_loss_mask
+
+    def bbox_differentiable(self, outputs, target_boxes, box_loss_mask, num_boxes):
+        indices = jnp.where(box_loss_mask > 0) # I am clever
+        src_boxes, target_boxes = outputs["pred_boxes"][indices], target_boxes[indices]
+        loss_bbox = jnp.abs(src_boxes - target_boxes) 
         losses = {}
         losses["loss_bbox"] = loss_bbox.sum() / num_boxes
         loss_giou = 1 - jnp.diag(
@@ -256,11 +266,11 @@ class DetrLoss():
         
         return batch_idx, src_idx
 
-    def _get_tgt_permutation_idx(self, indices):
-        # permute targets following indices
-        batch_idx = jnp.concatenate([(jnp.ones(tgt.shape)*i).astype(jnp.int32) for i, (_, tgt) in enumerate(indices)])
-        tgt_idx = jnp.concatenate([tgt.astype(jnp.int32) for (_, tgt) in indices])
-        return batch_idx, tgt_idx
+    # def _get_tgt_permutation_idx(self, indices):
+    #     # permute targets following indices
+    #     batch_idx = jnp.concatenate([(jnp.ones(tgt.shape)*i).astype(jnp.int32) for i, (_, tgt) in enumerate(indices)])
+    #     tgt_idx = jnp.concatenate([tgt.astype(jnp.int32) for (_, tgt) in indices])
+    #     return batch_idx, tgt_idx
 
     # def get_loss(self, loss, outputs, targets, indices, num_boxes):
     #     loss_map = { 
@@ -282,10 +292,10 @@ class DetrLoss():
         num_boxes = jnp.clip(num_boxes, 1)
 
         ce_labels = self.get_labels_ce(outputs, targets, indices, num_boxes)
-        bbx_idx, target_boxes = self.get_labels_and_idxs_bbox(outputs, targets, indices, num_boxes)
+        target_boxes, box_loss_mask = self.get_labels_and_idxs_bbox(outputs, targets, indices, num_boxes)
         cardnality_error = self.loss_cardinality(outputs, targets, indices, num_boxes)
 
-        return {'ce_labels': ce_labels, 'bbx_idx': bbx_idx, 'target_boxes' : target_boxes, 'cardinality_error': cardnality_error, 'num_boxes': num_boxes}
+        return {'ce_labels': ce_labels, 'target_boxes' : target_boxes, 'box_loss_mask': box_loss_mask, 'cardinality_error': cardnality_error, 'num_boxes': num_boxes}
 
     def get_losses(self, arrangements, outputs, targets):
         '''
@@ -294,7 +304,8 @@ class DetrLoss():
 
         '''
         ce_loss = self.ce_differentiable(outputs, arrangements['ce_labels'])
-        bbox_loss = self.bbox_differentiable(outputs, arrangements['bbx_idx'], arrangements['target_boxes'], arrangements['num_boxes'])
+        bbox_loss = self.bbox_differentiable(outputs, arrangements['target_boxes'], arrangements['box_loss_mask'], arrangements['num_boxes'])
+
         loss_sum = ce_loss['loss_ce']*self.loss_weightings['loss_ce'] + bbox_loss['loss_bbox']*self.loss_weightings['loss_bbox'] + bbox_loss['loss_giou']*self.loss_weightings['loss_giou']
         # Todo replace with nicer syntax once we figure out if jit hates dict comprehensions
         return loss_sum, ce_loss, bbox_loss
