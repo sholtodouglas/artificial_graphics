@@ -161,7 +161,7 @@ class DetrLoss():
     of matched ground-truth / prediction (supervise class and box)
     """
 
-    def __init__(self, matcher, num_classes, eos_coef, losses):
+    def __init__(self, matcher, num_classes, eos_coef, losses, loss_bbox=5, loss_giou=2):
         """
         Create the criterion.
         A note on the num_classes parameter (copied from original repo in detr.py): "the naming of the `num_classes`
@@ -182,31 +182,32 @@ class DetrLoss():
         self.eos_coef = eos_coef
         self.losses = losses
         self.ce_weight = jnp.concatenate([jnp.ones(self.num_classes), jnp.array([self.eos_coef])]) # different coeff for null
-        self.loss_weightings = {'loss_ce': 1, 'loss_bbox':1, 'loss_giou':1}
+        self.loss_weightings = {'loss_ce': 1, 'loss_bbox':loss_bbox, 'loss_giou':loss_giou}
 
 
     # removed logging parameter, which was part of the original implementation
-    def loss_labels(self, outputs, targets, indices, num_boxes):
+    def get_labels_ce(self, outputs, targets, indices, num_boxes):
         """
         Classification loss (NLL) targets dicts must contain the key "class_labels" containing a tensor of dim
         [nb_target_boxes]
         """
-        assert "logits" in outputs, "No logits were found in the outputs"
-        src_logits = outputs["logits"] # B, 100, N_classes
-
         idx = self._get_src_permutation_idx(indices) #  batch indices ) (tensor([0, 0, 0, 0, ... 1, 1, 1]), tensor([ 2,  7, 11, ..., 27, 59]))
         target_classes_o = jnp.concatenate([t["class_labels"][J] for t, (_, J) in zip(targets, indices)]) # gets the class at each idx
         
-        target_classes = jnp.ones(src_logits.shape[:2])* self.num_classes # default inits with the final 'no class' label (i.e, creates a B, N)
+        target_classes = jnp.ones(outputs["logits"].shape[:2])* self.num_classes # default inits with the final 'no class' label (i.e, creates a B, N)
 
-        
         target_classes = scatter_nd(target_classes, jnp.vstack(idx).astype(jnp.int32).T, target_classes_o)
 
-        loss_ce = weighted_softmax_ce(src_logits, jax.nn.one_hot(target_classes, self.num_classes+1), self.ce_weight) # ([B, N_classes, N_heads]), [B, N_heads], empty_weight is just 1s for all classes but 0.1 for null class
+        return jax.nn.one_hot(target_classes, self.num_classes+1) # labels
 
-        losses = {"loss_ce": loss_ce}
-
-        return losses
+    def ce_differentiable(self, outputs, labels):
+        '''
+        Need in logits Logits B, N_preds, N_classes - sould come from 
+        Labels is generated above, and is identical in shape 
+        '''
+        loss_ce = weighted_softmax_ce(outputs['logits'], labels, self.ce_weight) # ([B, N_classes, N_heads]), [B, N_heads], empty_weight is just 1s for all classes but 0.1 for null class
+        return {'loss_ce': loss_ce}
+        
 
     # TODO CAN WE SPECIFY NO GRAD
     def loss_cardinality(self, outputs, targets, indices, num_boxes):
@@ -220,34 +221,29 @@ class DetrLoss():
         # Count the number of predictions that are NOT "no-object" (which is the last class)
         card_pred = (logits.argmax(-1) != logits.shape[-1] - 1).sum(1)
         card_err = jnp.mean(jnp.abs(card_pred.astype(jnp.float32) - tgt_lengths.astype(jnp.float32)))
-        losses = {"cardinality_error": card_err}
-        return losses
+        return card_err
 
-    def loss_boxes(self, outputs, targets, indices, num_boxes):
+    def get_labels_and_idxs_bbox(self, outputs, targets, indices, num_boxes):
         """
         Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss.
         Targets dicts must contain the key "boxes" containing a tensor of dim [nb_target_boxes, 4]. The target boxes
         are expected in format (center_x, center_y, w, h), normalized by the image size.
         """
-        assert "pred_boxes" in outputs, "No predicted boxes found in outputs"
-        idx = self._get_src_permutation_idx(indices)
+        bbx_idx = self._get_src_permutation_idx(indices)
 
-        src_boxes = outputs["pred_boxes"][idx]
-        
         target_boxes = jnp.concatenate([t["boxes"][i] for t, (_, i) in zip(targets, indices)], axis=0)
 
+        return bbx_idx, target_boxes
+
+    def bbox_differentiable(self, outputs, idx, target_boxes, num_boxes):
+        src_boxes = outputs["pred_boxes"][idx]
         loss_bbox = jnp.abs(src_boxes - target_boxes)
-
-
         losses = {}
         losses["loss_bbox"] = loss_bbox.sum() / num_boxes
-
-        
         loss_giou = 1 - jnp.diag(
             generalized_box_iou(center_to_corners_format(src_boxes), center_to_corners_format(target_boxes))
         )
         losses["loss_giou"] = loss_giou.sum() / num_boxes
-
         return losses
 
 
@@ -266,41 +262,45 @@ class DetrLoss():
         tgt_idx = jnp.concatenate([tgt.astype(jnp.int32) for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def get_loss(self, loss, outputs, targets, indices, num_boxes):
-        loss_map = { 
-            "labels": self.loss_labels,
-            "cardinality": self.loss_cardinality,
-            "boxes": self.loss_boxes,
-        }
-        assert loss in loss_map, f"Loss {loss} not supported"
-        return loss_map[loss](outputs, targets, indices, num_boxes)
+    # def get_loss(self, loss, outputs, targets, indices, num_boxes):
+    #     loss_map = { 
+    #         "labels": self.loss_labels,
+    #         "cardinality": self.loss_cardinality,
+    #         "boxes": self.loss_boxes,
+    #     }
+    #     assert loss in loss_map, f"Loss {loss} not supported"
+    #     return loss_map[loss](outputs, targets, indices, num_boxes)
 
-    def forward(self, outputs, targets):
-        """
-        This performs the loss computation.
-        Parameters:
-             outputs: dict of tensors, see the output specification of the model for the format
-             targets: list of dicts, such that len(targets) == batch_size.
-                      The expected keys in each dict depends on the losses applied, see each loss' doc
-        """
-        outputs_without_aux = {k: v for k, v in outputs.items() if k != "auxiliary_outputs"} # logits, pred_boxes
 
+    def non_differentiable(self, outputs, targets):
         # Retrieve the matching between the outputs of the last layer and the targets
-        indices = self.matcher.forward(outputs_without_aux, targets)
+        indices = self.matcher.forward(outputs, targets)
 
         # Compute the average number of target boxes accross all nodes, for normalization purposes
         num_boxes = sum(len(t["class_labels"]) for t in targets)
         num_boxes = jnp.array([num_boxes], dtype=jnp.float32)
-        
         num_boxes = jnp.clip(num_boxes, 1)
 
-        # Compute all the requested losses
-        losses = {}
-        for loss in self.losses:
-            losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes))
-        # Todo maybe re-include intermeidate auxiliary losses
-        loss = sum(losses[k] * self.loss_weightings[k] for k in self.loss_weightings.keys())
-        return loss, losses
+        ce_labels = self.get_labels_ce(self, outputs, targets, indices, num_boxes)
+        bbx_idx, target_boxes = self.get_labels_and_idxs_bbox(self, outputs, targets, indices, num_boxes)
+        cardnality_error = self.loss_cardinality(self, outputs, targets, indices, num_boxes)
+
+        return {'ce_labels': ce_labels, 'bbx_idx': bbx_idx, 'target_boxes' : target_boxes, 'cardinality_error': cardnality_error}
+
+    def get_losses(self, arrangements, outputs, targets):
+        '''
+        Using the arrangements returned by the non_differentiable pass, do outputs / targets. The reason we splt this up
+        Is that we can't pmap the non-differentable part, the loops fuck up @jit and it has to retrace every time. 
+
+        '''
+        ce_loss = self.ce_differentiable(outputs, arrangements['ce_labels'])
+        bbox_loss = self.bbox_differentiable(outputs, arrangements['bbx_idx'], arrangements['target_boxes'])
+        loss_sum = ce_loss['loss_ce']*self.loss_weightings['loss_ce'] + bbox_loss['loss_bbox']*self.loss_weightings['loss_bbox'] + bbox_loss['loss_giou']*self.loss_weightings['loss_giou']
+        # Todo replace with nicer syntax once we figure out if jit hates dict comprehensions
+        return loss_sum, ce_loss, bbox_loss
+
+
+
 
 
 
