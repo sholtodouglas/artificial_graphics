@@ -281,9 +281,9 @@ class DetrLoss():
         num_boxes = jnp.array([num_boxes], dtype=jnp.float32)
         num_boxes = jnp.clip(num_boxes, 1)
 
-        ce_labels = self.get_labels_ce(self, outputs, targets, indices, num_boxes)
-        bbx_idx, target_boxes = self.get_labels_and_idxs_bbox(self, outputs, targets, indices, num_boxes)
-        cardnality_error = self.loss_cardinality(self, outputs, targets, indices, num_boxes)
+        ce_labels = self.get_labels_ce(outputs, targets, indices, num_boxes)
+        bbx_idx, target_boxes = self.get_labels_and_idxs_bbox(outputs, targets, indices, num_boxes)
+        cardnality_error = self.loss_cardinality(outputs, targets, indices, num_boxes)
 
         return {'ce_labels': ce_labels, 'bbx_idx': bbx_idx, 'target_boxes' : target_boxes, 'cardinality_error': cardnality_error}
 
