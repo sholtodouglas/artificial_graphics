@@ -11,7 +11,6 @@ from flax import struct
 from scipy.optimize import linear_sum_assignment
 
 
-import numpy as np
 
 def center_to_corners_format(t):
     """
@@ -193,20 +192,19 @@ class DetrLoss():
         [nb_target_boxes]
         """
         idx = self._get_src_permutation_idx(indices) #  batch indices ) (tensor([0, 0, 0, 0, ... 1, 1, 1]), tensor([ 2,  7, 11, ..., 27, 59]))
-        target_classes_o = np.concatenate([t["class_labels"][J] for t, (_, J) in zip(targets, indices)]) # gets the class at each idx
+        target_classes_o = jnp.concatenate([t["class_labels"][J] for t, (_, J) in zip(targets, indices)]) # gets the class at each idx
         
-        return idx, target_classes_o # labels
+        target_classes = jnp.ones(outputs["logits"].shape[:2])* self.num_classes # default inits with the final 'no class' label (i.e, creates a B, N)
 
-    def ce_differentiable(self, outputs, label_idx, target_classes_o):
+        target_classes = scatter_nd(target_classes, jnp.vstack(idx).astype(jnp.int32).T, target_classes_o)
+
+        return jax.nn.one_hot(target_classes, self.num_classes+1) # labels
+
+    def ce_differentiable(self, outputs, labels):
         '''
         Need in logits Logits B, N_preds, N_classes - sould come from 
         Labels is generated above, and is identical in shape 
         '''
-        target_classes = jnp.ones(outputs["logits"].shape[:2])* self.num_classes # default inits with the final 'no class' label (i.e, creates a B, N)
-
-        target_classes = scatter_nd(target_classes, jnp.vstack(label_idx).astype(jnp.int32).T, target_classes_o)
-
-        labels = jax.nn.one_hot(target_classes, self.num_classes+1)
         loss_ce = weighted_softmax_ce(outputs['logits'], labels, self.ce_weight) # ([B, N_classes, N_heads]), [B, N_heads], empty_weight is just 1s for all classes but 0.1 for null class
         return {'loss_ce': loss_ce}
         
@@ -219,10 +217,10 @@ class DetrLoss():
         """
         logits = outputs["logits"]
 
-        tgt_lengths = np.array([len(v["class_labels"]) for v in targets])
+        tgt_lengths = jnp.array([len(v["class_labels"]) for v in targets])
         # Count the number of predictions that are NOT "no-object" (which is the last class)
         card_pred = (logits.argmax(-1) != logits.shape[-1] - 1).sum(1)
-        card_err = np.mean(np.abs(card_pred.astype(np.float32) - tgt_lengths.astype(np.float32)))
+        card_err = jnp.mean(jnp.abs(card_pred.astype(jnp.float32) - tgt_lengths.astype(jnp.float32)))
         return card_err
 
     def get_labels_and_idxs_bbox(self, outputs, targets, indices, num_boxes):
@@ -233,7 +231,7 @@ class DetrLoss():
         """
         bbx_idx = self._get_src_permutation_idx(indices)
 
-        target_boxes = np.concatenate([t["boxes"][i] for t, (_, i) in zip(targets, indices)], axis=0)
+        target_boxes = jnp.concatenate([t["boxes"][i] for t, (_, i) in zip(targets, indices)], axis=0)
 
         return bbx_idx, target_boxes
 
@@ -253,15 +251,15 @@ class DetrLoss():
         # Source (nn output)
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
-        batch_idx = np.concatenate([(np.ones(src.shape)*i).astype(np.int32) for i, (src, _) in enumerate(indices)]) # creates the batch indices (i.e 0,0,0,0,1,1) depending on how many tgts there are
-        src_idx = np.concatenate([src.astype(np.int32) for (src, _) in indices]) # just gets the source indices that correspond
+        batch_idx = jnp.concatenate([(jnp.ones(src.shape)*i).astype(jnp.int32) for i, (src, _) in enumerate(indices)]) # creates the batch indices (i.e 0,0,0,0,1,1) depending on how many tgts there are
+        src_idx = jnp.concatenate([src.astype(jnp.int32) for (src, _) in indices]) # just gets the source indices that correspond
         
         return batch_idx, src_idx
 
     def _get_tgt_permutation_idx(self, indices):
         # permute targets following indices
-        batch_idx = np.concatenate([(np.ones(tgt.shape)*i).astype(np.int32) for i, (_, tgt) in enumerate(indices)])
-        tgt_idx = np.concatenate([tgt.astype(np.int32) for (_, tgt) in indices])
+        batch_idx = jnp.concatenate([(jnp.ones(tgt.shape)*i).astype(jnp.int32) for i, (_, tgt) in enumerate(indices)])
+        tgt_idx = jnp.concatenate([tgt.astype(jnp.int32) for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
     # def get_loss(self, loss, outputs, targets, indices, num_boxes):
@@ -280,14 +278,14 @@ class DetrLoss():
 
         # Compute the average number of target boxes accross all nodes, for normalization purposes
         num_boxes = sum(len(t["class_labels"]) for t in targets)
-        num_boxes = np.array([num_boxes], dtype=jnp.float32)
-        num_boxes = np.clip(num_boxes, 1, a_max=None)
+        num_boxes = jnp.array([num_boxes], dtype=jnp.float32)
+        num_boxes = jnp.clip(num_boxes, 1)
 
-        ce_idx, target_classes_o = self.get_labels_ce(outputs, targets, indices, num_boxes)
+        ce_labels = self.get_labels_ce(outputs, targets, indices, num_boxes)
         bbx_idx, target_boxes = self.get_labels_and_idxs_bbox(outputs, targets, indices, num_boxes)
         cardnality_error = self.loss_cardinality(outputs, targets, indices, num_boxes)
 
-        return {'ce_idx': ce_idx, 'target_classes_o': target_classes_o, 'bbx_idx': bbx_idx, 'target_boxes' : target_boxes, 'cardinality_error': cardnality_error, 'num_boxes': num_boxes}
+        return {'ce_labels': ce_labels, 'bbx_idx': bbx_idx, 'target_boxes' : target_boxes, 'cardinality_error': cardnality_error, 'num_boxes': num_boxes}
 
     def get_losses(self, arrangements, outputs, targets):
         '''
@@ -295,7 +293,7 @@ class DetrLoss():
         Is that we can't pmap the non-differentable part, the loops fuck up @jit and it has to retrace every time. 
 
         '''
-        ce_loss = self.ce_differentiable(outputs, arrangements['ce_idx'], arrangements['target_classes_o'])
+        ce_loss = self.ce_differentiable(outputs, arrangements['ce_labels'])
         bbox_loss = self.bbox_differentiable(outputs, arrangements['bbx_idx'], arrangements['target_boxes'], arrangements['num_boxes'])
         loss_sum = ce_loss['loss_ce']*self.loss_weightings['loss_ce'] + bbox_loss['loss_bbox']*self.loss_weightings['loss_bbox'] + bbox_loss['loss_giou']*self.loss_weightings['loss_giou']
         # Todo replace with nicer syntax once we figure out if jit hates dict comprehensions
