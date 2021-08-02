@@ -150,7 +150,7 @@ def weighted_softmax_ce(logits, labels, weights):
     return -jnp.sum(unweighted*weights) / jnp.sum(weights*labels) # replicates pytorch's weighted softmax. Divide by the sum of the true weights (as each example is multiplied by its weight)
 
 
-
+import numpy as np
 
 class DetrLoss():
     """
@@ -190,7 +190,7 @@ class DetrLoss():
         [nb_target_boxes]
         """
         idx = self._get_src_permutation_idx(indices) #  batch indices ) (tensor([0, 0, 0, 0, ... 1, 1, 1]), tensor([ 2,  7, 11, ..., 27, 59]))
-        target_classes_o = jnp.concatenate([t["class_labels"][J] for t, (_, J) in zip(targets, indices)]) # gets the class at each idx
+        target_classes_o = jnp.concatenate([t["class_labels"][np.array(J)] for t, (_, J) in zip(targets, indices)]) # gets the class at each idx
         
         target_classes = jnp.ones(outputs["logits"].shape[:2])* self.num_classes # default inits with the final 'no class' label (i.e, creates a B, N)
 
