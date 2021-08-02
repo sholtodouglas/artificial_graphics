@@ -149,9 +149,7 @@ def weighted_softmax_ce(logits, labels, weights):
     unweighted = labels * jax.nn.log_softmax(logits, axis=-1) # B,N_targets,N_classes+1
     return -jnp.sum(unweighted*weights) / jnp.sum(weights*labels) # replicates pytorch's weighted softmax. Divide by the sum of the true weights (as each example is multiplied by its weight)
 
-def scatter_nd(original, indices, updates):
-    key = tuple(jnp.moveaxis(indices, -1, 0))
-    return original.at[key].set(updates)
+
 
 
 class DetrLoss():
@@ -196,7 +194,7 @@ class DetrLoss():
         
         target_classes = jnp.ones(outputs["logits"].shape[:2])* self.num_classes # default inits with the final 'no class' label (i.e, creates a B, N)
 
-        target_classes = scatter_nd(target_classes, jnp.vstack(idx).astype(jnp.int32).T, target_classes_o)
+        target_classes = self.scatter_nd(target_classes, jnp.vstack(idx).astype(jnp.int32).T, target_classes_o)
 
         return jax.nn.one_hot(target_classes, self.num_classes+1) # labels
 
@@ -239,8 +237,8 @@ class DetrLoss():
         box_loss_indices = jnp.ones(len(target_boxes_o))
 
 
-        target_boxes = scatter_nd(target_boxes, jnp.vstack(bbx_idx).astype(jnp.int32).T, target_boxes_o)
-        box_loss_mask = scatter_nd(box_loss_mask, jnp.vstack(bbx_idx).astype(jnp.int32).T, box_loss_indices)
+        target_boxes = self.scatter_nd(target_boxes, jnp.vstack(bbx_idx).astype(jnp.int32).T, target_boxes_o)
+        box_loss_mask = self.scatter_nd(box_loss_mask, jnp.vstack(bbx_idx).astype(jnp.int32).T, box_loss_indices)
 
         return target_boxes, box_loss_mask
 
@@ -265,6 +263,10 @@ class DetrLoss():
         src_idx = jnp.concatenate([src.astype(jnp.int32) for (src, _) in indices]) # just gets the source indices that correspond
         
         return batch_idx, src_idx
+
+    def scatter_nd(self, original, indices, updates):
+        key = tuple(jnp.moveaxis(indices, -1, 0))
+        return original.at[key].set(updates)
 
     # def _get_tgt_permutation_idx(self, indices):
     #     # permute targets following indices
@@ -297,7 +299,7 @@ class DetrLoss():
 
         return {'ce_labels': ce_labels, 'target_boxes' : target_boxes, 'box_loss_mask': box_loss_mask, 'cardinality_error': cardnality_error, 'num_boxes': num_boxes}
 
-    def get_losses(self, arrangements, outputs, targets):
+    def get_losses(self, arrangements, outputs):
         '''
         Using the arrangements returned by the non_differentiable pass, do outputs / targets. The reason we splt this up
         Is that we can't pmap the non-differentable part, the loops fuck up @jit and it has to retrace every time. 
