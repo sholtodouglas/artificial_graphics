@@ -9,7 +9,7 @@ from jax_resnet import pretrained_resnet, Sequential, slice_variables, ResNet50
 from typing import Callable, Any, Optional
 from flax import struct
 from scipy.optimize import linear_sum_assignment
-
+import ray
 
 
 def center_to_corners_format(t):
@@ -303,7 +303,6 @@ class DetrLoss():
         cardnality_error = self.loss_cardinality(outputs, targets, indices, num_boxes)
 
         return {'ce_labels': ce_labels, 'target_boxes' : target_boxes, 'box_loss_mask': box_loss_mask, 'cardinality_error': cardnality_error, 'num_boxes': num_boxes}
-
 
     def get_losses(self, arrangements, outputs):
         '''
@@ -662,3 +661,46 @@ def load_pretrained_resnet(params):
     mutable_dict['batch_stats']['backbone'] = backbone_variables['batch_stats']
     mutable_dict['params']['backbone'] = backbone_variables['params']
     return mutable_dict
+
+
+
+
+################################################################################################
+
+
+
+@ray.remote
+class non_diff(object):
+    '''
+    distirbute out the non-differentiable part on our CPUs - WHY GOD WHY IS THIS THE FASTEST WAY ITS SO LAME.
+    '''
+    def __init__(self, loss):
+        import jax
+        self.loss = loss
+
+    def f(self, x):
+        no_grad_outputs, targets = x[0], x[1]
+        arrangements = self.loss.non_differentiable(no_grad_outputs, targets)
+        return arrangements 
+
+
+
+
+def partition_outputs(outputs, num_devices = 8):
+  '''
+  Splits the outputs by the # devices, so that we can do the non differentiable part off device (and not interrupt jit tracing)
+  '''
+  no_grad_outputs = []
+  for i in range(0, num_devices):
+          no_grad_outputs.append({k: v[i] for k,v in outputs.items()})
+  return no_grad_outputs
+
+
+def merge_arrangements(out):
+    arrangements = {'ce_labels': [], 'box_loss_mask': [], 'target_boxes': [], 'num_boxes': [], 'cardinality_error': []}
+    for arr in out:
+        for k,v in arrangements.items():
+            arrangements[k].append(arr[k])
+    arrangements = {k: jnp.stack(v) for k,v in arrangements.items()}
+    return arrangements
+    
