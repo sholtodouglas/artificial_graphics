@@ -228,8 +228,9 @@ class DetrLoss():
         are expected in format (center_x, center_y, w, h), normalized by the image size.
         """
         bbx_idx = self._get_src_permutation_idx(indices)
+        B, N, _ = outputs['pred_boxes'].shape
+        target_boxes = jnp.concatenate([jnp.zeros((B,N,2)), jnp.ones((B,N,2))], -1) # [[0,0,1,1]]
 
-        target_boxes = jnp.zeros(outputs['pred_boxes'].shape)
 
         box_loss_mask = jnp.zeros(outputs['pred_boxes'].shape[:2])
 
@@ -243,14 +244,20 @@ class DetrLoss():
         return target_boxes, box_loss_mask
 
     def bbox_differentiable(self, outputs, target_boxes, box_loss_mask, num_boxes):
-        indices = jnp.where(box_loss_mask > 0) # I am clever
-        src_boxes, target_boxes = outputs["pred_boxes"][indices], target_boxes[indices]
-        loss_bbox = jnp.abs(src_boxes - target_boxes) 
+        box_loss_mask = box_loss_mask[:,:, jnp.newaxis]
+        src_boxes, target_boxes = outputs["pred_boxes"], target_boxes
+        loss_bbox = jnp.abs(src_boxes - target_boxes) * box_loss_mask
         losses = {}
         losses["loss_bbox"] = loss_bbox.sum() / num_boxes
+        B,N,D = src_boxes.shape
+        src_boxes, target_boxes = jnp.reshape(src_boxes, (B*N,D)), jnp.reshape(target_boxes, (B*N, D))
+
         loss_giou = 1 - jnp.diag(
             generalized_box_iou(center_to_corners_format(src_boxes), center_to_corners_format(target_boxes))
-        )
+        ) 
+        loss_giou = jnp.reshape(loss_giou, (B, N, 1)) * box_loss_mask
+
+
         losses["loss_giou"] = loss_giou.sum() / num_boxes
         return losses
 
@@ -298,6 +305,7 @@ class DetrLoss():
         cardnality_error = self.loss_cardinality(outputs, targets, indices, num_boxes)
 
         return {'ce_labels': ce_labels, 'target_boxes' : target_boxes, 'box_loss_mask': box_loss_mask, 'cardinality_error': cardnality_error, 'num_boxes': num_boxes}
+
 
     def get_losses(self, arrangements, outputs):
         '''
