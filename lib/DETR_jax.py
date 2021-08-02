@@ -233,7 +233,7 @@ class DetrLoss():
 
         box_loss_mask = jnp.zeros(outputs['pred_boxes'].shape[:2])
 
-        target_boxes_o = jnp.concatenate([t["boxes"][i] for t, (_, i) in zip(targets, indices)], axis=0)
+        target_boxes_o = jnp.concatenate([t["boxes"][np.array(i)] for t, (_, i) in zip(targets, indices)], axis=0)
         box_loss_indices = jnp.ones(len(target_boxes_o))
 
 
