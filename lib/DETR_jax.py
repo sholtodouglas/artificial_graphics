@@ -315,7 +315,7 @@ class DetrLoss():
 
         loss_sum = ce_loss['loss_ce']*self.loss_weightings['loss_ce'] + bbox_loss['loss_bbox']*self.loss_weightings['loss_bbox'] + bbox_loss['loss_giou']*self.loss_weightings['loss_giou']
         # Todo replace with nicer syntax once we figure out if jit hates dict comprehensions
-        return loss_sum, ce_loss, bbox_loss
+        return loss_sum, {'ce_loss': ce_loss, 'bbox_loss': bbox_loss}
 
 
 
