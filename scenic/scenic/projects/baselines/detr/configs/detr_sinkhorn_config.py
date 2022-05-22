@@ -105,7 +105,7 @@ def get_config():
   config.pretrained_backbone_configs = ml_collections.ConfigDict()
   # Download pretrained ResNet50 checkpoints from here:
   # https://github.com/google-research/scenic/tree/main/scenic/projects/baselines pylint: disable=line-too-long
-  config.init_from.checkpoint_path = 'path_to_checkpoint_of_resnet_50'
+  config.init_from.checkpoint_path = 'models/ResNet50_ImageNet1k'
 
   # Logging.
   config.write_summary = True
