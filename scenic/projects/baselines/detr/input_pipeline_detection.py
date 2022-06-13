@@ -164,6 +164,9 @@ def coco_load_split_from_tfds(batch_size,
   split = 'train' if train else 'validation'
   builder = tfds.builder('coco/2017')
 
+  # TODO check if it already exists
+  builder.download_and_prepare()
+
   # Each host is responsible for a fixed subset of data.
   base_split_name, host_start, host_end = dataset_utils.get_data_range(
       builder, split, jax.process_index(), jax.process_count())

@@ -25,12 +25,43 @@ source 39/bin/activate
 git clone https://github.com/sholtodouglas/artificial_graphics
 cd artificial_graphics
 pip install --upgrade pip
-pip install .
+pip install -e .
 # keep these out of requirements as somewhat time specific
 pip install "jax[tpu]>=0.2.16" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 pip install "protobuf==3.20.1"
 ```
 
 ```
+pip install -r scenic/projects/baselines/detr/requirements.txt
 wget https://storage.googleapis.com/scenic-bucket/baselines/ResNet50_ImageNet1k -P models
+```
+
+```
+python artificial_graphics/scenic/projects/baselines/detr/main.py \
+  --config=artificial_graphics/scenic/projects/baselines/detr/configs/detr_config.py \
+  --workdir=./
+```
+
+```
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--config", "artificial_graphics/scenic/projects/baselines/detr/configs/detr_config.py",
+                "--workdir", "./"
+            ]
+        }
+    ]
+}
 ```
