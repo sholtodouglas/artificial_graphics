@@ -9,3 +9,4 @@ __pycache__
 /lightning_logs/*
 /models/*
 /build/*
+/scenic.egg-info/*
