@@ -8,3 +8,4 @@ __pycache__
 /lib/__pycache__
 /lightning_logs/*
 /models/*
+/build/*
